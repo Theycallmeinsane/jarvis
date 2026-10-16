@@ -1,0 +1,69 @@
+"""A tiny tool registry. Decorate a function with @tool and Jarvis can call it."""
+from __future__ import annotations
+
+import inspect
+import logging
+from dataclasses import dataclass
+from typing import Any, Callable
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class Tool:
+    name: str
+    description: str
+    parameters: dict
+    func: Callable[..., Any]
+    dangerous: bool = False          # ask for confirmation before running
+    enabled: Callable[[Any], bool] | None = None   # cfg -> bool
+
+    def schema(self) -> dict:
+        return {"name": self.name, "description": self.description, "parameters": self.parameters}
+
+
+_TOOLS: dict[str, Tool] = {}
+
+
+def tool(description: str, params: dict[str, dict] | None = None, required: list[str] | None = None,
+         dangerous: bool = False, enabled: Callable[[Any], bool] | None = None, name: str | None = None):
+    """Register a tool. `params` maps argument name -> JSON-schema snippet."""
+    def deco(fn):
+        props = params or {}
+        req = required if required is not None else [
+            p for p, v in inspect.signature(fn).parameters.items()
+            if v.default is inspect.Parameter.empty and p in props
+        ]
+        schema = {"type": "object", "properties": props, "required": req}
+        t = Tool(name or fn.__name__, description, schema, fn, dangerous, enabled)
+        _TOOLS[t.name] = t
+        return fn
+    return deco
+
+
+class ToolBox:
+    """The set of tools active for this run, plus shared context they can use."""
+
+    def __init__(self, cfg, context: dict[str, Any] | None = None):
+        from . import builtin  # noqa: F401  registers the built-in tools
+
+        self.cfg = cfg
+        self.context = context or {}
+        self.tools = {n: t for n, t in _TOOLS.items() if t.enabled is None or t.enabled(cfg)}
+
+    def schemas(self) -> list[dict]:
+        return [t.schema() for t in self.tools.values()]
+
+    def get(self, name: str) -> Tool | None:
+        return self.tools.get(name)
+
+    def run(self, name: str, args: dict) -> str:
+        t = self.tools.get(name)
+        if not t:
+            raise KeyError(f"Unknown tool {name}")
+        sig = inspect.signature(t.func)
+        if "ctx" in sig.parameters:
+            args = {**args, "ctx": self}
+        allowed = {k: v for k, v in args.items() if k in sig.parameters}
+        result = t.func(**allowed)
+        return "done" if result is None else str(result)

@@ -1,0 +1,84 @@
+# Jarvis configuration. Paths are relative to this folder unless absolute.
+# Secrets (API keys) go in .env, never here.
+
+assistant:
+  name: Jarvis
+  user_name: Muhammad
+  follow_up_seconds: 6        # keep listening (no wake word needed) right after a reply
+  idle_reset_minutes: 5       # forget the conversation after this much silence
+  max_tool_steps: 6           # max tool calls per request before giving up
+
+wake_word:
+  model: hey_jarvis           # built-in openWakeWord model, or a path to your own .onnx
+  threshold: 0.5              # 0-1, raise if it triggers by itself, lower if it misses you
+  cooldown_seconds: 1.5
+
+audio:
+  input_device: null          # null = Windows default mic, or an index / part of the name (e.g. "HyperX")
+  output_device: null
+  chime: true                 # short beep when Jarvis starts / stops listening
+
+recording:
+  vad_aggressiveness: 2       # 0-3 (webrtcvad), higher = stricter about what counts as speech
+  silence_ms: 800             # stop recording after this much silence
+  start_timeout_s: 6          # give up if you say nothing after the wake word
+  max_seconds: 20
+
+stt:
+  provider: faster_whisper
+  model: small.en             # tiny.en | base.en | small.en | medium.en | large-v3-turbo
+  device: auto                # auto | cuda | cpu
+  compute_type: auto          # auto | float16 | int8_float16 | int8
+  language: en
+  download_root: models/whisper
+  hints: "Jarvis, Lahore, Spotify, YouTube, VS Code"   # words/names it should expect; add your own
+
+llm:
+  provider: ollama            # ollama | lmstudio | openai_compat | claude   (local is the default)
+  temperature: 0.2
+  max_history_messages: 20    # local models only; trimmed oldest-first
+  providers:
+    ollama:
+      base_url: http://localhost:11434
+      model: qwen3.5:4b
+      think: false            # qwen3 "thinking" adds seconds of latency; off for voice
+      keep_alive: 30m
+      num_ctx: 8192
+      max_tool_rounds: 1      # small models chain unrequested tools; raise to 2-3 for 8B+ models
+    lmstudio:                 # LM Studio local server (Developer tab -> Start server)
+      base_url: http://localhost:1234/v1
+      model: local-model
+      api_key_env: null
+      max_tool_rounds: 1
+    openai_compat:            # any OpenAI-compatible endpoint: llama.cpp server, vLLM, Groq, OpenRouter, OpenAI...
+      base_url: http://localhost:8080/v1
+      model: local-model
+      api_key_env: OPENAI_COMPAT_API_KEY
+    claude:
+      model: claude-opus-5-5  # claude-sonnet-5-5 / claude-haiku-5-5 are faster and cheaper
+      effort: low             # low keeps voice replies quick
+      max_tokens: 16000
+      api_key_env: ANTHROPIC_API_KEY
+
+tts:
+  provider: piper             # piper | kokoro | sapi  (all run locally)
+  piper:
+    voice: en_GB-alan-medium  # any voice from https://huggingface.co/rhasspy/piper-voices
+    length_scale: 0.95        # < 1 speaks faster
+    models_dir: models/piper
+  kokoro:
+    voice: bm_george          # British male; try am_michael, af_heart, bf_emma ...
+    speed: 1.05
+    models_dir: models/kokoro
+  sapi:                       # built-in Windows voices, zero download
+    rate: 185
+    voice: null               # part of a voice name, e.g. "David" or "Hazel"
+
+tools:
+  confirm_dangerous: true     # ask "shall I proceed?" before risky actions
+  allow_shell: false          # let Jarvis run PowerShell commands (always asks first)
+  ask_claude: true            # "ask Claude ..." escalation tool, only active if ANTHROPIC_API_KEY is set
+  weather: true               # uses wttr.in (needs internet)
+  notes_file: data/notes.md
+  screenshots_dir: ~/Pictures/Jarvis
+  search_dirs: [~/Desktop, ~/Documents, ~/Downloads]
