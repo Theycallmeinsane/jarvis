@@ -30,11 +30,11 @@ class WakeWordDetector:
         self._last = 0.0
         log.info("Wake word ready: %s (threshold %.2f)", ", ".join(self.names), threshold)
 
-    def process(self, frame: np.ndarray) -> float | None:
+    def process(self, frame: np.ndarray, threshold: float | None = None) -> float | None:
         """Feed one 80 ms int16 frame. Returns the score if the wake word fired."""
         scores = self.model.predict(frame)
         best = max(scores.values()) if scores else 0.0
-        if best >= self.threshold and time.monotonic() - self._last > self.cooldown:
+        if best >= (threshold or self.threshold) and time.monotonic() - self._last > self.cooldown:
             self._last = time.monotonic()
             self.reset()
             return best

@@ -17,16 +17,24 @@ class Tool:
     func: Callable[..., Any]
     dangerous: bool = False          # ask for confirmation before running
     enabled: Callable[[Any], bool] | None = None   # cfg -> bool
+    confirm: Callable[[dict], str] | None = None   # args -> the question Jarvis asks before running
 
     def schema(self) -> dict:
         return {"name": self.name, "description": self.description, "parameters": self.parameters}
+
+    def confirmation(self, args: dict) -> str:
+        if self.confirm:
+            return self.confirm(args)
+        detail = ", ".join(f"{k} {v}" for k, v in args.items())
+        return f"Shall I {self.name.replace('_', ' ')} {detail}?".replace("  ", " ")
 
 
 _TOOLS: dict[str, Tool] = {}
 
 
 def tool(description: str, params: dict[str, dict] | None = None, required: list[str] | None = None,
-         dangerous: bool = False, enabled: Callable[[Any], bool] | None = None, name: str | None = None):
+         dangerous: bool = False, enabled: Callable[[Any], bool] | None = None, name: str | None = None,
+         confirm: Callable[[dict], str] | None = None):
     """Register a tool. `params` maps argument name -> JSON-schema snippet."""
     def deco(fn):
         props = params or {}
@@ -35,7 +43,7 @@ def tool(description: str, params: dict[str, dict] | None = None, required: list
             if v.default is inspect.Parameter.empty and p in props
         ]
         schema = {"type": "object", "properties": props, "required": req}
-        t = Tool(name or fn.__name__, description, schema, fn, dangerous, enabled)
+        t = Tool(name or fn.__name__, description, schema, fn, dangerous, enabled, confirm)
         _TOOLS[t.name] = t
         return fn
     return deco
@@ -45,7 +53,7 @@ class ToolBox:
     """The set of tools active for this run, plus shared context they can use."""
 
     def __init__(self, cfg, context: dict[str, Any] | None = None):
-        from . import builtin  # noqa: F401  registers the built-in tools
+        from . import builtin, google_tools, memory_tools  # noqa: F401  registers the built-in tools
 
         self.cfg = cfg
         self.context = context or {}

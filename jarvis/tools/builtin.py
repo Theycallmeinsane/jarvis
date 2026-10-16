@@ -180,7 +180,8 @@ def open_website(url: str):
     return f"Opened {url}."
 
 
-@tool("Search the web in the browser (Google), or YouTube when the user asks for videos/music.",
+@tool("Open a Google or YouTube search in the browser. ONLY when the user explicitly asks to search, google, "
+      "or look something up in the browser. Never for stories, chat or questions you can answer yourself.",
       {"query": {"type": "string"},
        "site": {"type": "string", "enum": ["google", "youtube"], "description": "default google"}})
 def web_search(query: str, site: str = "google"):

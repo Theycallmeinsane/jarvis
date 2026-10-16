@@ -27,6 +27,7 @@ runs a systems check. The first run downloads the speech models (~0.6 GB) into `
 Other ways to run it:
 
 ```powershell
+.\jarvis-tray.bat                # run quietly in the system tray (right-click the icon for options)
 .\jarvis.bat --text              # type instead of talk (good for testing)
 .\jarvis.bat --text --speak      # type, but hear the replies
 .\jarvis.bat --llm claude        # use Claude for this run
@@ -40,7 +41,19 @@ Other ways to run it:
 * **"Hey Jarvis"** → a chime → speak → Jarvis answers.
 * For a few seconds after each answer you can keep talking **without** the wake word.
 * "Never mind" / "cancel" stops; "thanks Jarvis" / "that's all" ends the conversation.
-* Risky actions (closing apps, shutdown, PowerShell) ask *"Shall I…?"* and wait for a yes.
+* **Interrupt it:** say "Hey Jarvis" while it's talking; it stops mid-sentence and listens (`barge_in` in config).
+* Risky actions (closing apps, sending email, shutdown, PowerShell) ask *"Shall I…?"* and wait for a yes.
+* **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json` and known in every future
+  conversation; "what do you remember about me?" / "forget Sara". Recent exchanges (`data/history.jsonl`) are
+  replayed when Jarvis restarts, so it picks up where you left off.
+
+### Tray app
+
+`jarvis-tray.bat` runs Jarvis with no console window. The tray icon's ring changes colour with the state
+(blue idle, green listening, amber thinking, cyan speaking, grey paused). Right-click for:
+pause listening, stop talking, switch brain (Local / Claude / LM Studio / OpenAI-compatible),
+**Start with Windows** (adds a per-user startup entry, no admin needed), open settings / notes / log, quit.
+Logs go to `data/jarvis.log`.
 
 ### What it can do (built-in workflows)
 
@@ -62,6 +75,10 @@ Other ways to run it:
 | "How's my computer doing?" | `system_status` (CPU, RAM, GPU, disks) |
 | "Take a screenshot" | `take_screenshot` (Pictures/Jarvis) |
 | "Lock the computer", "restart in a bit" | `lock_computer` / `power` (asks first) |
+| "What's on my calendar tomorrow?" / "add dentist Monday at 3" | `calendar_upcoming` / `calendar_add_event` |
+| "Any new emails?" / "read the one from Sara" | `gmail_unread` / `gmail_read` |
+| "Email Sara that I'll be late" | `gmail_find_address` → `gmail_send` (reads it back, asks first) / `gmail_draft` |
+| "Remember that…" / "what do you know about me?" / "forget…" | `remember` / `list_memories` / `forget` |
 | "Switch to Claude" / "go back to local" | `switch_model` |
 | "Ask Claude to explain quantum tunnelling" | `ask_claude` (local brain hands a hard question to Claude) |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
@@ -83,6 +100,22 @@ def work_mode():
 
 The description string is what the model sees, so describe *when* to use it.
 Add `params={...}` (JSON-schema per argument) for inputs and `dangerous=True` to require a spoken yes.
+
+## Google Calendar & Gmail (optional)
+
+The Google tools stay hidden until you connect an account. One-time setup, about 5 minutes:
+
+1. Open [Google Cloud console](https://console.cloud.google.com/) → create a project (any name).
+2. **APIs & Services → Library**: enable **Google Calendar API** and **Gmail API**.
+3. **APIs & Services → OAuth consent screen**: External, add yourself under *Test users*.
+4. **Credentials → Create credentials → OAuth client ID → Desktop app**, then *Download JSON*.
+5. Save it as `secrets\google_credentials.json` in this folder (the `secrets/` folder is git-ignored).
+6. Run `.\jarvis.bat --google-login`. Your browser opens once to approve access; the token is saved to
+   `secrets\google_token.json`.
+
+Permissions requested: calendar events (read/add), Gmail read, and Gmail compose (drafts + send).
+Jarvis never sends an email without reading the recipient, subject and body back to you and hearing a yes.
+Delete `secrets\google_token.json` to disconnect.
 
 ## Switching brains
 
@@ -144,15 +177,18 @@ Windows 11 Pro, i5-12600K, 16 GB RAM, RTX 3050 8 GB, Ollama `qwen3.5:4b` fully o
 
 ```
 jarvis/
-  app.py           voice loop (wake → record → STT → agent → TTS → follow-up)
+  app.py           voice loop (wake → record → STT → agent → TTS → follow-up), barge-in
+  tray.py          system tray icon + menu, start-with-Windows
   agent.py         tool-calling loop, confirmation, brain switching
+  memory.py        remembered facts + conversation history across restarts
   audio.py         mic stream, speaker, chimes
   wakeword.py      openWakeWord "hey_jarvis"
   recorder.py      webrtcvad endpointing
   stt.py           faster-whisper (CUDA → CPU fallback)
   tts.py           Piper / Kokoro / SAPI
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
-  tools/           registry.py (@tool decorator), builtin.py (workflows)
+  tools/           registry.py (@tool decorator), builtin.py (workflows), google_tools.py (Calendar, Gmail),
+                   memory_tools.py (remember / forget)
   diagnostics.py   --check
 config.yaml        all settings
 tests/             offline unit tests:  python -m unittest discover tests

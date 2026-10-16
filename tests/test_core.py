@@ -103,6 +103,7 @@ class AgentTests(unittest.TestCase):
         agent.cfg = load_config()
         agent.confirm = confirm
         agent.toolbox = ToolBox(agent.cfg, {})
+        agent.memory = None
         agent._pending_switch = None
         agent._last_activity = time.monotonic()
         agent.provider = ScriptedProvider(turns)

@@ -6,3 +6,4 @@ config.local.yaml
 models/
 data/
 *.part
+secrets/

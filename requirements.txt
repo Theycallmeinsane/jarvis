@@ -25,3 +25,11 @@ psutil>=7.0
 pycaw>=20240316
 comtypes>=1.4
 pillow>=11.0
+
+# Google Calendar + Gmail tools (optional; only used once secrets/google_credentials.json exists)
+google-api-python-client>=2.150
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2
+
+# system tray
+pystray>=0.19
