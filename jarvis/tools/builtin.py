@@ -137,7 +137,8 @@ def _match_app(name: str) -> dict | None:
 
 
 @tool("Open / launch an application installed on this PC (e.g. Spotify, Chrome, VS Code, Steam, Settings).",
-      {"name": {"type": "string", "description": "App name as the user said it"}})
+      {"name": {"type": "string", "description": "App name as the user said it"}},
+      triggers=("open", "launch", "start", "run", "fire up", "bring up", "load", "show"))
 def open_app(name: str):
     key = name.lower().strip()
     app = _match_app(name)
@@ -155,7 +156,7 @@ def open_app(name: str):
 
 
 @tool("Close a running application by name (e.g. 'chrome', 'spotify').",
-      {"name": {"type": "string"}}, dangerous=True)
+      {"name": {"type": "string"}}, dangerous=True, triggers=("close", "quit", "kill", "exit", "shut", "stop"))
 def close_app(name: str):
     import psutil
 
@@ -172,7 +173,8 @@ def close_app(name: str):
     return f"Closed {', '.join(sorted(killed))}." if killed else f"No running app matched {name}."
 
 
-@tool("Open a website in the default browser.", {"url": {"type": "string"}})
+@tool("Open a website in the default browser.", {"url": {"type": "string"}},
+      triggers=("open", "go to", "visit", "website", "site", "pull up", "load", "show", "launch"))
 def open_website(url: str):
     if not url.startswith(("http://", "https://")):
         url = "https://" + url.replace(" ", "")
@@ -183,7 +185,8 @@ def open_website(url: str):
 @tool("Open a Google or YouTube search in the browser. ONLY when the user explicitly asks to search, google, "
       "or look something up in the browser. Never for stories, chat or questions you can answer yourself.",
       {"query": {"type": "string"},
-       "site": {"type": "string", "enum": ["google", "youtube"], "description": "default google"}})
+       "site": {"type": "string", "enum": ["google", "youtube"], "description": "default google"}},
+      triggers=("search", "google", "look up", "lookup", "youtube", "browse", "online", "video"))
 def web_search(query: str, site: str = "google"):
     q = urllib.parse.quote_plus(query)
     url = (f"https://www.youtube.com/results?search_query={q}" if site == "youtube"
@@ -204,7 +207,8 @@ MEDIA_KEYS = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "stop": 0xB2}
 
 
 @tool("Control media playback (Spotify, YouTube, any player).",
-      {"action": {"type": "string", "enum": list(MEDIA_KEYS)}})
+      {"action": {"type": "string", "enum": list(MEDIA_KEYS)}},
+      triggers=("play", "pause", "stop", "next", "skip", "previous", "resume", "music", "song", "track", "back"))
 def media_control(action: str):
     _key(MEDIA_KEYS[action])
     return f"Media {action.replace('_', ' ')}."
@@ -376,7 +380,7 @@ class _INPUT(ctypes.Structure):
 
 
 @tool("Type text into the focused window. ONLY when the user explicitly says 'type ...' or 'dictate ...'. "
-      "Never use this to reply to the user.", {"text": {"type": "string"}})
+      "Never use this to reply to the user.", {"text": {"type": "string"}}, triggers=("type", "dictate", "write"))
 def type_text(text: str):
     KEYEVENTF_UNICODE, KEYEVENTF_KEYUP = 0x0004, 0x0002
     time.sleep(0.3)
@@ -390,7 +394,7 @@ def type_text(text: str):
 
 # ---------------------------------------------------------------- screen & power
 
-@tool("Take a screenshot and save it to Pictures/Jarvis.")
+@tool("Take a screenshot and save it to Pictures/Jarvis.", triggers=("screenshot", "screen shot", "capture", "snap"))
 def take_screenshot(ctx=None):
     from PIL import ImageGrab
 
@@ -401,14 +405,15 @@ def take_screenshot(ctx=None):
     return f"Screenshot saved to {path}."
 
 
-@tool("Lock the computer.")
+@tool("Lock the computer.", triggers=("lock",))
 def lock_computer():
     ctypes.windll.user32.LockWorkStation()
     return "Locked."
 
 
 @tool("Shut down, restart or put the computer to sleep.",
-      {"action": {"type": "string", "enum": ["shutdown", "restart", "sleep", "cancel"]}}, dangerous=True)
+      {"action": {"type": "string", "enum": ["shutdown", "restart", "sleep", "cancel"]}}, dangerous=True,
+      triggers=("shut", "restart", "reboot", "sleep", "power", "turn off", "cancel"))
 def power(action: str):
     if action == "sleep":
         subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Callable
 
 import requests
 
@@ -28,7 +29,38 @@ class OpenAICompatProvider(LLMProvider):
             return f"Can't reach {self.base_url} ({e.__class__.__name__}). Is the server running?"
         return None
 
-    def step(self, use_tools: bool = True) -> Turn:
+    def _stream(self, body: dict, on_text: Callable[[str], None]) -> dict:
+        """Server-sent events; tool calls arrive as fragments keyed by index."""
+        body = {**body, "stream": True}
+        content: list[str] = []
+        calls: dict[int, dict] = {}
+        with requests.post(f"{self.base_url}/chat/completions", json=body, headers=self.headers,
+                           timeout=180, stream=True) as r:
+            r.raise_for_status()
+            for line in r.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                choices = json.loads(data).get("choices") or [{}]
+                delta = choices[0].get("delta") or {}
+                if delta.get("content"):
+                    content.append(delta["content"])
+                    on_text(delta["content"])
+                for tc in delta.get("tool_calls") or []:
+                    slot = calls.setdefault(tc.get("index", 0), {
+                        "id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                    slot["id"] = tc.get("id") or slot["id"]
+                    fn = tc.get("function") or {}
+                    slot["function"]["name"] += fn.get("name") or ""
+                    slot["function"]["arguments"] += fn.get("arguments") or ""
+        msg = {"content": "".join(content)}
+        if calls:
+            msg["tool_calls"] = [c | {"id": c["id"] or f"call_{i}"} for i, c in sorted(calls.items())]
+        return msg
+
+    def step(self, use_tools: bool = True, on_text: Callable[[str], None] | None = None) -> Turn:
         self._trim()
         body = {
             "model": self.model,
@@ -37,9 +69,12 @@ class OpenAICompatProvider(LLMProvider):
         }
         if use_tools and self._tool_defs:
             body["tools"] = self._tool_defs
-        r = requests.post(f"{self.base_url}/chat/completions", json=body, headers=self.headers, timeout=180)
-        r.raise_for_status()
-        msg = r.json()["choices"][0]["message"]
+        if on_text is not None:
+            msg = self._stream(body, on_text)
+        else:
+            r = requests.post(f"{self.base_url}/chat/completions", json=body, headers=self.headers, timeout=180)
+            r.raise_for_status()
+            msg = r.json()["choices"][0]["message"]
         clean = {"role": "assistant", "content": msg.get("content") or ""}
         if msg.get("tool_calls"):
             clean["tool_calls"] = msg["tool_calls"]

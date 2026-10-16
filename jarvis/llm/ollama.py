@@ -1,6 +1,9 @@
 """Ollama native /api/chat with tool calling (default local brain)."""
 from __future__ import annotations
 
+import json
+from typing import Callable
+
 import requests
 
 from .base import LLMProvider, ToolCall, ToolResult, Turn
@@ -39,23 +42,44 @@ class OllamaProvider(LLMProvider):
         except requests.RequestException:
             pass
 
-    def step(self, use_tools: bool = True) -> Turn:
+    def _post(self, body: dict, stream: bool):
+        r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=180, stream=stream)
+        if r.status_code == 400 and "think" in r.text:   # model without a thinking switch
+            body.pop("think")
+            r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=180, stream=stream)
+        r.raise_for_status()
+        return r
+
+    def step(self, use_tools: bool = True, on_text: Callable[[str], None] | None = None) -> Turn:
         self._trim()
         body = {
             "model": self.model,
             "messages": [{"role": "system", "content": self.system_prompt}] + self.messages,
             "tools": self._tool_defs if use_tools else [],
-            "stream": False,
+            "stream": on_text is not None,
             "think": self.think,
             "keep_alive": self.keep_alive,
             "options": {"temperature": self.temperature, "num_ctx": self.num_ctx},
         }
-        r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=180)
-        if r.status_code == 400 and "think" in r.text:   # model without a thinking switch
-            body.pop("think")
-            r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=180)
-        r.raise_for_status()
-        msg = r.json()["message"]
+        if on_text is None:
+            msg = self._post(body, stream=False).json()["message"]
+        else:  # stream tokens so the voice can start on the first sentence
+            content, tool_calls = [], []
+            with self._post(body, stream=True) as r:
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    chunk = json.loads(line)
+                    m = chunk.get("message") or {}
+                    if m.get("content"):
+                        content.append(m["content"])
+                        on_text(m["content"])
+                    tool_calls += m.get("tool_calls") or []
+                    if chunk.get("done"):
+                        break
+            msg = {"role": "assistant", "content": "".join(content)}
+            if tool_calls:
+                msg["tool_calls"] = tool_calls
         msg.pop("thinking", None)
         self.messages.append(msg)
 
@@ -64,8 +88,6 @@ class OllamaProvider(LLMProvider):
             fn = tc.get("function", {})
             args = fn.get("arguments") or {}
             if isinstance(args, str):
-                import json
-
                 try:
                     args = json.loads(args)
                 except ValueError:

@@ -13,7 +13,7 @@ from .audio import CHIME_DONE, CHIME_ERROR, CHIME_LISTEN, CHIME_SR, Microphone, 
 from .config import Section
 from .recorder import CommandRecorder
 from .stt import Transcriber
-from .tts import clean_for_speech, create_tts
+from .tts import SentenceSplitter, clean_for_speech, create_tts
 from .wakeword import WakeWordDetector
 
 log = logging.getLogger(__name__)
@@ -26,6 +26,15 @@ WAKE_PREFIX = re.compile(r"^\W*((hey|hi|ok|okay)\W+)?(jarvis|travis|vis)\b\W*", 
 WAKE_TAILS = {"vis", "is", "this", "his", "hey", "jarvis"}
 # Whisper sometimes "hears" these in silence or noise
 HALLUCINATIONS = {"", "you", "thank you.", "thanks for watching!", "bye.", ".", "thank you for watching."}
+
+
+class _Confirmation:
+    """A yes/no question the agent thread hands to the speaking thread."""
+
+    def __init__(self, question: str):
+        self.question = question
+        self.answer = False
+        self.done = threading.Event()
 
 
 def say(text: str):
@@ -45,6 +54,7 @@ class VoiceAssistant:
         self.stop_event = threading.Event()     # quit
         self.paused = threading.Event()         # tray "Pause listening"
         self.hush = threading.Event()           # tray "Stop talking"
+        self._active = None                     # (sentence queue, splitter) of the reply being spoken
         bi = cfg.get("barge_in") or {}
         self.barge_in = bool(bi.get("enabled", True))
         # higher than the normal threshold: Jarvis's own voice leaks into the mic on open speakers
@@ -79,13 +89,18 @@ class VoiceAssistant:
                 log.debug("state listener failed", exc_info=True)
 
     def speak(self, text: str) -> bool:
-        """Say text sentence by sentence (the next sentence is synthesized while this one plays).
-        Returns True if the user barged in with "Hey Jarvis" (or the tray said hush)."""
-        text = clean_for_speech(text)
-        if not text:
-            return False
-        say(text)
-        self._set_state("speaking")
+        """Say a complete text. Returns True if the user barged in with "Hey Jarvis"."""
+        q: "queue.Queue[str | None]" = queue.Queue()
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            q.put(sentence)
+        q.put(None)
+        return self.speak_stream(q)
+
+    def speak_stream(self, sentences: "queue.Queue[str | None]") -> bool:
+        """Speak sentences as they arrive on the queue (None ends it), synthesizing the next one while
+        the current one plays. The mic keeps listening for "Hey Jarvis" the whole time (barge-in),
+        including while the reply is still being generated.
+        Returns True if the user barged in (False when the tray said hush / quitting)."""
         self.hush.clear()
         if self.barge_in:
             self.mic.clear()           # keep listening, but only for the wake word
@@ -93,39 +108,91 @@ class VoiceAssistant:
         else:
             self.mic.muted.set()       # don't let Jarvis hear (and wake) itself
         interrupted = False
+        ready = None                   # synthesized audio waiting for its turn
+        playing_until = 0.0
+        finished = False
+        spoke = False
         try:
-            sentences = [s for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-            upcoming = self.tts.synthesize(sentences[0])
-            for i in range(len(sentences)):
-                audio, sr = upcoming
-                self.speaker.play(audio, sr, blocking=False)
-                end = time.monotonic() + len(audio) / sr
-                upcoming = self.tts.synthesize(sentences[i + 1]) if i + 1 < len(sentences) else None
-                while time.monotonic() < end:
-                    if self.hush.is_set() or self.stop_event.is_set():
+            while True:
+                now = time.monotonic()
+                if ready is not None and now >= playing_until:
+                    audio, sr = ready
+                    ready = None
+                    self._set_state("speaking")
+                    self.speaker.play(audio, sr, blocking=False)
+                    playing_until = now + len(audio) / sr
+                    spoke = True
+                if ready is None and not finished:
+                    try:
+                        item = sentences.get_nowait()
+                    except queue.Empty:
+                        item = ""
+                    if item is None:
+                        finished = True
+                    elif isinstance(item, _Confirmation):
+                        # the agent needs a yes/no: finish the current sentence, then ask on this thread
+                        while time.monotonic() < playing_until:
+                            time.sleep(0.03)
+                        item.answer = self._ask_yes_no(item.question)
+                        item.done.set()
+                        self._set_state("thinking")
+                        continue
+                    elif item and (text := clean_for_speech(item)):
+                        say(text)
+                        ready = self.tts.synthesize(text)
+                        continue  # play it straight away if nothing is playing
+                if finished and ready is None and time.monotonic() >= playing_until:
+                    break
+                if self.hush.is_set() or self.stop_event.is_set():
+                    interrupted = True
+                elif self.barge_in:
+                    frame = self.mic.read(timeout=0.04)
+                    if frame is not None and self.wake.process(frame, self.barge_threshold):
+                        log.info("barge-in")
                         interrupted = True
-                    elif self.barge_in:
-                        frame = self.mic.read(timeout=0.05)
-                        if frame is not None and self.wake.process(frame, self.barge_threshold):
-                            log.info("barge-in")
-                            interrupted = True
-                    else:
-                        time.sleep(0.03)
-                    if interrupted:
-                        self.speaker.stop()
-                        break
+                else:
+                    time.sleep(0.03)
                 if interrupted:
+                    self.speaker.stop()
                     break
         except Exception as e:
             log.warning("TTS failed: %s", e)
         finally:
-            if not interrupted:
+            if spoke and not interrupted:
                 time.sleep(0.15)
             self.mic.clear()
             self.wake.reset()
             self.mic.muted.clear()
             self._set_state("idle")
         return interrupted and not self.hush.is_set() and not self.stop_event.is_set()
+
+    def respond(self, text: str) -> bool:
+        """Run the agent in the background and speak its reply while it's still being written.
+        Returns True if the user barged in."""
+        self._set_state("thinking")
+        q: "queue.Queue[str | None]" = queue.Queue()
+        splitter = SentenceSplitter(q.put)
+        self._active = (q, splitter)
+
+        def work():
+            t0 = time.perf_counter()
+            try:
+                reply = self.agent.handle(text, on_text=splitter.feed)
+                splitter.flush()
+                if not splitter.emitted:   # provider didn't stream
+                    q.put(reply or "Done.")
+            except Exception:
+                log.exception("agent failed")
+                q.put("Sorry, something went wrong.")
+            finally:
+                log.debug("agent %.2fs", time.perf_counter() - t0)
+                q.put(None)
+
+        threading.Thread(target=work, daemon=True, name="agent").start()
+        try:
+            return self.speak_stream(q)
+        finally:
+            self._active = None
 
     def listen(self, timeout: float | None = None) -> str | None:
         """Record and transcribe one utterance. Leftovers of the wake word ("...vis", "Jarvis")
@@ -147,10 +214,23 @@ class VoiceAssistant:
             return text
         return None
 
-    def confirm(self, question: str) -> bool:
+    def _ask_yes_no(self, question: str) -> bool:
         self.speak(question)
         answer = self.listen(timeout=6) or ""
         return bool(YES.search(answer))
+
+    def confirm(self, question: str) -> bool:
+        """Called by the agent (on its own thread) before a risky tool runs."""
+        active = self._active
+        if active is None or threading.current_thread().name != "agent":
+            return self._ask_yes_no(question)
+        q, splitter = active
+        splitter.flush()                 # say whatever it was in the middle of first
+        request = _Confirmation(question)
+        q.put(request)
+        if not request.done.wait(timeout=60):  # e.g. the user barged in and nobody is listening
+            return False
+        return request.answer
 
     # ------------------------------------------------------------ conversation
 
@@ -165,11 +245,7 @@ class VoiceAssistant:
             if GOODBYE.match(text):
                 self.speak("At your service, sir.")
                 break
-            self._set_state("thinking")
-            t0 = time.perf_counter()
-            reply = self.agent.handle(text)
-            log.debug("agent %.2fs", time.perf_counter() - t0)
-            if self.speak(reply or "Done."):
+            if self.respond(text):
                 # interrupted with "Hey Jarvis": take the new command right away
                 self.chime(CHIME_LISTEN)
                 text = self.listen()
@@ -186,8 +262,10 @@ class VoiceAssistant:
         print(f"\n{name} is online using {self.agent.provider.label}. Say \"Hey Jarvis\". (Ctrl+C to quit)\n")
         self._set_state("idle")
         # (not saying its own name here: on open speakers that could wake it)
-        self.speak("Online and ready, sir.")
+        barged = self.speak("Online and ready, sir.")
         try:
+            if barged:
+                self._converse_safely()
             while not self.stop_event.is_set():
                 if self.paused.is_set():
                     self._set_state("paused")
@@ -199,25 +277,29 @@ class VoiceAssistant:
                     self._set_state("idle")
                 while not self.announcements.empty():
                     self.chime(CHIME_LISTEN)
-                    self.speak(self.announcements.get())
+                    if self.speak(self.announcements.get()):
+                        self._converse_safely()
                 frame = self.mic.read(timeout=0.5)
                 if frame is None:
                     continue
                 score = self.wake.process(frame)
                 if score:
                     log.info("wake word (%.2f)", score)
-                    try:
-                        self.converse()
-                    except Exception:
-                        log.exception("conversation failed")
-                        self.chime(CHIME_ERROR)
-                        self._set_state("idle")
-                    self.mic.clear()
-                    self.wake.reset()
+                    self._converse_safely()
         except KeyboardInterrupt:
             print("\nShutting down.")
         finally:
             self.mic.stop()
+
+    def _converse_safely(self):
+        try:
+            self.converse()
+        except Exception:
+            log.exception("conversation failed")
+            self.chime(CHIME_ERROR)
+            self._set_state("idle")
+        self.mic.clear()
+        self.wake.reset()
 
     def stop(self):
         self.stop_event.set()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -18,6 +19,14 @@ class Tool:
     dangerous: bool = False          # ask for confirmation before running
     enabled: Callable[[Any], bool] | None = None   # cfg -> bool
     confirm: Callable[[dict], str] | None = None   # args -> the question Jarvis asks before running
+    # the user's request must contain one of these words, or the call is refused (stops small models
+    # from e.g. opening a browser search when asked for a story)
+    triggers: tuple[str, ...] = ()
+
+    def allowed_for(self, request: str) -> bool:
+        if not self.triggers:
+            return True
+        return bool(re.search(r"\b(" + "|".join(self.triggers) + r")", request, re.I))
 
     def schema(self) -> dict:
         return {"name": self.name, "description": self.description, "parameters": self.parameters}
@@ -34,7 +43,7 @@ _TOOLS: dict[str, Tool] = {}
 
 def tool(description: str, params: dict[str, dict] | None = None, required: list[str] | None = None,
          dangerous: bool = False, enabled: Callable[[Any], bool] | None = None, name: str | None = None,
-         confirm: Callable[[dict], str] | None = None):
+         confirm: Callable[[dict], str] | None = None, triggers: tuple[str, ...] = ()):
     """Register a tool. `params` maps argument name -> JSON-schema snippet."""
     def deco(fn):
         props = params or {}
@@ -43,7 +52,7 @@ def tool(description: str, params: dict[str, dict] | None = None, required: list
             if v.default is inspect.Parameter.empty and p in props
         ]
         schema = {"type": "object", "properties": props, "required": req}
-        t = Tool(name or fn.__name__, description, schema, fn, dangerous, enabled, confirm)
+        t = Tool(name or fn.__name__, description, schema, fn, dangerous, enabled, confirm, tuple(triggers))
         _TOOLS[t.name] = t
         return fn
     return deco

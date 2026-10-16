@@ -41,6 +41,40 @@ def clean_for_speech(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+class SentenceSplitter:
+    """Collect streamed LLM text and hand over complete sentences, so speaking starts early."""
+
+    BOUNDARY = re.compile(r"[.!?;:](?=\s)|\n")
+    MIN_CHARS = 12   # so "Mr." or "1." never get spoken on their own
+
+    def __init__(self, emit):
+        self.emit = emit
+        self.buf = ""
+        self.emitted = False
+
+    def feed(self, text: str):
+        self.buf += text
+        if "<think>" in self.buf and "</think>" not in self.buf:
+            return  # wait for the reasoning block to close, then drop it
+        self.buf = re.sub(r"<think>.*?</think>", "", self.buf, flags=re.S)
+        while True:
+            cut = next((m.end() for m in self.BOUNDARY.finditer(self.buf)
+                        if len(self.buf[:m.end()].strip()) >= self.MIN_CHARS), None)
+            if cut is None:
+                break
+            sentence, self.buf = self.buf[:cut].strip(), self.buf[cut:]
+            if sentence:
+                self.emitted = True
+                self.emit(sentence)
+
+    def flush(self):
+        rest = re.sub(r"<think>.*?(</think>|$)", "", self.buf, flags=re.S).strip()
+        self.buf = ""
+        if rest:
+            self.emitted = True
+            self.emit(rest)
+
+
 class PiperTTS:
     def __init__(self, voice: str = "en_GB-alan-medium", length_scale: float = 1.0, models_dir: str = "models/piper"):
         from piper import PiperVoice
