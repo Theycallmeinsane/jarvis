@@ -18,6 +18,7 @@ def main(argv=None):
     ap.add_argument("--config", help="path to a config.yaml")
     ap.add_argument("--list-devices", action="store_true", help="show microphones and speakers")
     ap.add_argument("--check", action="store_true", help="test every component and exit")
+    ap.add_argument("--wake-test", action="store_true", help="live wake-word score meter for tuning the threshold")
     ap.add_argument("--google-login", action="store_true", help="connect Google Calendar + Gmail (opens browser)")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
@@ -56,6 +57,10 @@ def main(argv=None):
 
         print(login(cfg))
         return
+    if args.wake_test:
+        from .diagnostics import run_wake_test
+
+        sys.exit(run_wake_test(cfg))
     if args.check:
         from .diagnostics import run_checks
 

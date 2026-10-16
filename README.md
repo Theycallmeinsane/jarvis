@@ -34,7 +34,11 @@ Other ways to run it:
 .\jarvis.bat --tts kokoro        # nicer (slower) voice
 .\jarvis.bat --list-devices      # find your mic's index / name
 .\jarvis.bat --check             # test every component
+.\jarvis.bat --wake-test         # live wake-word score meter, to tune the threshold for your mic
+.\jarvis.bat --google-login      # connect Google Calendar + Gmail (see below)
 ```
+
+First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (10 minutes).
 
 ## Talking to Jarvis
 
@@ -154,7 +158,7 @@ audio: {input_device: HyperX}
 | `tts.provider` | quality | speed | notes |
 |---|---|---|---|
 | `piper` (default) | good | very fast | `en_GB-alan-medium` British male; any [Piper voice](https://huggingface.co/rhasspy/piper-voices) |
-| `kokoro` | best | slower on CPU | `bm_george` British male; ~330 MB download |
+| `kokoro` | best | slow on CPU | `bm_george` British male; ~330 MB download. On the i5-12600K it took 5.4 s to make 4 s of audio (int8 model: 4.5 s), so it only makes sense with `onnxruntime-gpu` |
 | `sapi` | basic | fast | built-in Windows voices, no download; automatic fallback |
 
 ## Tuning

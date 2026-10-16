@@ -45,9 +45,11 @@ class VoiceAssistant:
     """States reported to on_state listeners (the tray icon): loading, idle, listening, thinking, speaking, paused."""
 
     def __init__(self, cfg: Section, llm: str | None = None, tts: str | None = None,
-                 on_state: Callable[[str], None] | None = None):
+                 on_state: Callable[[str], None] | None = None,
+                 on_announce: Callable[[str], None] | None = None):
         self.cfg = cfg
         self.on_state = on_state or (lambda s: None)
+        self.on_announce = on_announce or (lambda m: None)   # e.g. a Windows notification from the tray
         self.state = "loading"
         self.on_state(self.state)
         self.announcements: "queue.Queue[str]" = queue.Queue()
@@ -80,7 +82,15 @@ class VoiceAssistant:
         rec = cfg.recording
         self.recorder = CommandRecorder(self.mic, rec.get("vad_aggressiveness", 2), rec.get("silence_ms", 800),
                                         rec.get("start_timeout_s", 6), rec.get("max_seconds", 20))
-        self.agent = Agent(cfg, notify=self.announcements.put, confirm=self.confirm, provider=llm)
+        self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm)
+
+    def _announce(self, message: str):
+        """Timers/reminders: spoken at the next quiet moment, plus a desktop notification if available."""
+        self.announcements.put(message)
+        try:
+            self.on_announce(message)
+        except Exception:
+            log.debug("announce listener failed", exc_info=True)
 
     # ------------------------------------------------------------ audio helpers
 
