@@ -41,7 +41,14 @@ Other ways to run it:
 * **"Hey Jarvis"** → a chime → speak → Jarvis answers.
 * For a few seconds after each answer you can keep talking **without** the wake word.
 * "Never mind" / "cancel" stops; "thanks Jarvis" / "that's all" ends the conversation.
-* **Interrupt it:** say "Hey Jarvis" while it's talking; it stops mid-sentence and listens (`barge_in` in config).
+* **Push-to-talk:** press **Ctrl+Alt+J** anywhere instead of saying the wake word (`hotkey` in config).
+  It works even while listening is paused from the tray, so you can keep the mic "deaf" and use only the key.
+* **Interrupt it:** say "Hey Jarvis" (or press the hotkey) while it's talking; it stops mid-sentence and listens.
+* **Answers start fast:** replies are streamed, so Jarvis starts speaking the first sentence while the model
+  is still writing the rest.
+* **Small-model safety net:** action tools (search in browser, open app, type, power, close app, media keys)
+  only run if your request actually mentions that kind of action, so a 4B model can't open your browser
+  when you asked for a story.
 * Risky actions (closing apps, sending email, shutdown, PowerShell) ask *"Shall I…?"* and wait for a yes.
 * **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json` and known in every future
   conversation; "what do you remember about me?" / "forget Sara". Recent exchanges (`data/history.jsonl`) are
@@ -64,6 +71,8 @@ Logs go to `data/jarvis.log`.
 | "Search YouTube for lofi", "google the iPhone 18 release date" | `web_search` |
 | "Open github.com" | `open_website` |
 | "Who is Ada Lovelace?" | `wikipedia_summary` |
+| "What's the latest Python version?", "any tech news today?" | `web_lookup` (DuckDuckGo results read back, no browser) |
+| "What does this error on my screen say?", "what's open?" | `look_at_screen` (local qwen3.5 vision, or Claude) |
 | "What's the weather in Lahore?" | `get_weather` (wttr.in) |
 | "Volume to 30", "mute", "louder" | `volume` |
 | "Pause the music", "next song" | `media_control` |
@@ -181,6 +190,8 @@ jarvis/
   tray.py          system tray icon + menu, start-with-Windows
   agent.py         tool-calling loop, confirmation, brain switching
   memory.py        remembered facts + conversation history across restarts
+  vision.py        screenshot → vision model (local Ollama or Claude)
+  hotkey.py        global push-to-talk hotkey
   audio.py         mic stream, speaker, chimes
   wakeword.py      openWakeWord "hey_jarvis"
   recorder.py      webrtcvad endpointing

@@ -98,6 +98,25 @@ def wikipedia_summary(topic: str):
     return f"{title}: {r.get('extract', 'no summary available')}"
 
 
+@tool("Look something up on the web and get text back to answer from (current events, prices, scores, "
+      "release dates, anything after your training data). Doesn't open a browser.",
+      {"query": {"type": "string"},
+       "news": {"type": "boolean", "description": "true for latest news / headlines"}},
+      required=["query"], enabled=lambda cfg: cfg.tools.get("web_lookup", True))
+def web_lookup(query: str, news: bool = False):
+    from ddgs import DDGS
+
+    with DDGS() as d:
+        if news:
+            rows = d.news(query, max_results=5)
+            lines = [f"{r.get('date', '')[:10]} {r.get('source', '')}: {r['title']}. {r.get('body', '')[:200]}"
+                     for r in rows]
+        else:
+            rows = d.text(query, max_results=5)
+            lines = [f"{r['title']}: {r.get('body', '')[:300]}" for r in rows]
+    return "\n".join(lines) or f"Nothing found for {query}."
+
+
 # ---------------------------------------------------------------- apps & web
 
 _start_apps: list[dict] | None = None
@@ -403,6 +422,18 @@ def take_screenshot(ctx=None):
     path = folder / f"screenshot_{dt.datetime.now():%Y%m%d_%H%M%S}.png"
     ImageGrab.grab(all_screens=True).save(path)
     return f"Screenshot saved to {path}."
+
+
+@tool("Look at the user's screen and answer a question about it (what's open, read an error, "
+      "summarize a page, describe an image).",
+      {"question": {"type": "string", "description": "What the user wants to know about the screen"}},
+      triggers=("screen", "see", "look", "this", "read", "window", "error", "page", "display", "monitor",
+                "what's open", "showing", "watch"),
+      enabled=lambda cfg: (cfg.get("vision") or {}).get("enabled", True))
+def look_at_screen(question: str, ctx=None):
+    from ..vision import describe, grab_screen
+
+    return describe(ctx.cfg, grab_screen(), question)
 
 
 @tool("Lock the computer.", triggers=("lock",))

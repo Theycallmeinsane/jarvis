@@ -114,6 +114,7 @@ class SpeakWhileGeneratingTests(unittest.TestCase):
         va.state = "idle"
         va.stop_event, va.paused, va.hush = threading.Event(), threading.Event(), threading.Event()
         va.barge_in = False
+        va.hotkey = None
         va._active = None
         va.mic = mock.MagicMock()
         va.mic.muted = threading.Event()

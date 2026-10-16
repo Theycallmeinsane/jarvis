@@ -55,6 +55,15 @@ class VoiceAssistant:
         self.paused = threading.Event()         # tray "Pause listening"
         self.hush = threading.Event()           # tray "Stop talking"
         self._active = None                     # (sentence queue, splitter) of the reply being spoken
+        self.hotkey = None
+        combo = cfg.get("hotkey")
+        if combo:
+            from .hotkey import Hotkey
+
+            try:
+                self.hotkey = Hotkey(combo).start()
+            except ValueError as e:
+                log.warning("hotkey disabled: %s", e)
         bi = cfg.get("barge_in") or {}
         self.barge_in = bool(bi.get("enabled", True))
         # higher than the normal threshold: Jarvis's own voice leaks into the mic on open speakers
@@ -144,6 +153,9 @@ class VoiceAssistant:
                 if finished and ready is None and time.monotonic() >= playing_until:
                     break
                 if self.hush.is_set() or self.stop_event.is_set():
+                    interrupted = True
+                elif self._hotkey_pressed():
+                    log.info("barge-in (hotkey)")
                     interrupted = True
                 elif self.barge_in:
                     frame = self.mic.read(timeout=0.04)
@@ -267,10 +279,13 @@ class VoiceAssistant:
             if barged:
                 self._converse_safely()
             while not self.stop_event.is_set():
-                if self.paused.is_set():
+                if self.paused.is_set():   # wake word off; the push-to-talk hotkey still works
                     self._set_state("paused")
                     self.mic.clear()
-                    self.stop_event.wait(0.3)
+                    if self._hotkey_pressed():
+                        self._converse_safely()
+                        self._set_state("paused")
+                    self.stop_event.wait(0.2)
                     continue
                 if self.state == "paused":
                     self.wake.reset()
@@ -279,7 +294,11 @@ class VoiceAssistant:
                     self.chime(CHIME_LISTEN)
                     if self.speak(self.announcements.get()):
                         self._converse_safely()
-                frame = self.mic.read(timeout=0.5)
+                if self._hotkey_pressed():
+                    log.info("push-to-talk")
+                    self._converse_safely()
+                    continue
+                frame = self.mic.read(timeout=0.2)
                 if frame is None:
                     continue
                 score = self.wake.process(frame)
@@ -290,6 +309,12 @@ class VoiceAssistant:
             print("\nShutting down.")
         finally:
             self.mic.stop()
+
+    def _hotkey_pressed(self) -> bool:
+        if self.hotkey and self.hotkey.pressed.is_set():
+            self.hotkey.pressed.clear()
+            return True
+        return False
 
     def _converse_safely(self):
         try:
@@ -304,6 +329,8 @@ class VoiceAssistant:
     def stop(self):
         self.stop_event.set()
         self.speaker.stop()
+        if self.hotkey:
+            self.hotkey.stop()
 
 
 def run_text_mode(cfg: Section, llm: str | None = None, tts: str | None = None, speak: bool = False):

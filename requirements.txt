@@ -33,3 +33,6 @@ google-auth-httplib2>=0.2
 
 # system tray
 pystray>=0.19
+
+# web lookups (spoken answers from search results)
+ddgs>=9.0
