@@ -121,5 +121,23 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
     check("speech->text", stt)
     check("voice", voice)
     check("brain", brain)
+
+    # optional extras: informational, never counted as failures
+    import os
+
+    from .routines import routines_from
+    from .tools.google_tools import _paths
+
+    def info(name: str, text: str):
+        print(f"[ -- ] {name:<12} {text}")
+
+    print()
+    has_key = any(os.environ.get(k) for k in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"))
+    info("claude", "API key found" if has_key else "no ANTHROPIC_API_KEY in .env (optional)")
+    creds, token = _paths(cfg)
+    info("google", "connected" if token.exists() else
+         ("credentials found, run --google-login" if creds.exists() else "not set up (optional, see README)"))
+    info("hotkey", cfg.get("hotkey") or "off")
+    info("routines", ", ".join(routines_from(cfg)) or "none")
     print(f"\n{'All systems go.' if not failures else f'{failures} problem(s) found.'}")
     return 1 if failures else 0
