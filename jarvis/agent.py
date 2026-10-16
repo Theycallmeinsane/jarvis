@@ -9,6 +9,7 @@ from typing import Callable
 
 from .config import Section
 from .llm import ALIASES, LLMProvider, ToolResult, create_provider
+from .memory import Memory
 from .tools import ToolBox
 
 log = logging.getLogger(__name__)
@@ -36,8 +37,10 @@ class Agent:
                  confirm: Callable[[str], bool] | None = None, provider: str | None = None):
         self.cfg = cfg
         self.confirm = confirm or (lambda q: True)
+        self.memory = Memory(cfg) if (cfg.get("memory") or {}).get("enabled", True) else None
         self.toolbox = ToolBox(cfg, context={
-            "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude})
+            "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
+            "memory": self.memory})
         self._pending_switch: str | None = None
         self._claude_helper = None
         self._last_activity = time.monotonic()
@@ -47,8 +50,9 @@ class Agent:
 
     def _system_prompt(self) -> str:
         a = self.cfg.assistant
-        return SYSTEM_PROMPT.format(name=a.get("name", "Jarvis"), user=a.get("user_name", "the user"),
-                                    today=dt.date.today().strftime("%A %d %B %Y"))
+        prompt = SYSTEM_PROMPT.format(name=a.get("name", "Jarvis"), user=a.get("user_name", "the user"),
+                                      today=dt.date.today().strftime("%A %d %B %Y"))
+        return prompt + (self.memory.facts_prompt() if self.memory else "")
 
     def _make(self, name: str) -> LLMProvider:
         p = create_provider(name, self.cfg.llm, self._system_prompt(), self.toolbox.schemas())
@@ -57,8 +61,17 @@ class Agent:
             log.warning(problem)
         if hasattr(p, "warm_up"):
             p.warm_up()
+        self._fresh_conversation(p)
         log.info("Brain: %s", p.label)
         return p
+
+    def _fresh_conversation(self, p: LLMProvider):
+        """New conversation: current date + remembered facts, and the last few exchanges replayed.
+        (The system prompt only changes here, never mid-conversation, so histories stay append-only.)"""
+        p.reset()
+        p.system_prompt = self._system_prompt()
+        if self.memory:
+            p.messages = self.memory.seed_messages()
 
     def switch(self, name: str) -> str:
         try:
@@ -86,18 +99,20 @@ class Agent:
     def handle(self, text: str) -> str:
         idle_limit = float(self.cfg.assistant.get("idle_reset_minutes", 5)) * 60
         if time.monotonic() - self._last_activity > idle_limit:
-            self.provider.reset()
+            self._fresh_conversation(self.provider)
         self._last_activity = time.monotonic()
 
         try:
             reply = self._run(text)
+            if self.memory and reply:
+                self.memory.log_exchange(text, reply, self.provider.label)
         except Exception as e:
             log.exception("LLM error")
             reply = f"Sorry, my {self.provider.name} brain ran into a problem: {e.__class__.__name__}."
             problem = self.provider.check()
             if problem:
                 reply += " " + problem
-            self.provider.reset()
+            self._fresh_conversation(self.provider)
 
         if self._pending_switch:
             name, self._pending_switch = self._pending_switch, None
@@ -129,8 +144,7 @@ class Agent:
             return ToolResult(call, f"Not run: missing {', '.join(missing)}. Only call tools the user asked for.",
                               is_error=True)
         if tool.dangerous and self.cfg.tools.get("confirm_dangerous", True):
-            args = ", ".join(f"{k} {v}" for k, v in call.arguments.items())
-            if not self.confirm(f"Shall I {call.name.replace('_', ' ')} {args}?"):
+            if not self.confirm(tool.confirmation(call.arguments)):
                 return ToolResult(call, "The user declined; nothing was done.")
         try:
             out = self.toolbox.run(call.name, call.arguments)
