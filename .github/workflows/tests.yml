@@ -4,9 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   unit:
+    name: Unit tests (offline)
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -21,3 +23,26 @@ jobs:
           pip install -r requirements.txt
       - name: Run offline tests (no mic, models, Ollama or network needed)
         run: python -m unittest discover tests -v
+
+  voice:
+    name: Local voice chain (Piper -> wake word -> Whisper)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Cache speech models
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: speech-models-${{ hashFiles('config.yaml', 'scripts/voice_smoke.py') }}
+          restore-keys: speech-models-
+      - name: Speak, wake and transcribe with local models only
+        run: python scripts/voice_smoke.py

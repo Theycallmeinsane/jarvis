@@ -35,13 +35,14 @@ Today is {today}."""
 
 class Agent:
     def __init__(self, cfg: Section, notify: Callable[[str], None] | None = None,
-                 confirm: Callable[[str], bool] | None = None, provider: str | None = None):
+                 confirm: Callable[[str], bool] | None = None, provider: str | None = None,
+                 speak: Callable[[str], None] | None = None):
         self.cfg = cfg
         self.confirm = confirm or (lambda q: True)
         self.memory = Memory(cfg) if (cfg.get("memory") or {}).get("enabled", True) else None
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
-            "memory": self.memory})
+            "memory": self.memory, "speak": speak})
         self._pending_switch: str | None = None
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None

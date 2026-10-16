@@ -63,7 +63,7 @@ class ToolBox:
     """The set of tools active for this run, plus shared context they can use."""
 
     def __init__(self, cfg, context: dict[str, Any] | None = None):
-        from . import builtin, google_tools, memory_tools  # noqa: F401  registers the built-in tools
+        from . import builtin, google_tools, memory_tools, windows  # noqa: F401  registers the built-in tools
 
         self.cfg = cfg
         self.context = context or {}
@@ -73,6 +73,9 @@ class ToolBox:
 
             for t in mcp_tools(cfg):
                 self.tools.setdefault(t.name, t)
+        # tools.disabled: names you never want offered (fewer tools = faster, steadier small models)
+        for name in (cfg.get("tools") or {}).get("disabled") or []:
+            self.tools.pop(name, None)
 
     def schemas(self) -> list[dict]:
         return [t.schema(self.cfg) for t in self.tools.values()]

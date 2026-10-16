@@ -1,5 +1,7 @@
 # Jarvis — a local voice assistant for Windows
 
+[![tests](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml/badge.svg)](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml)
+
 Say **"Hey Jarvis"**, ask for something, and Jarvis does it on your PC and answers out loud.
 Everything runs **locally by default**: wake word, speech-to-text, the language model and the voice.
 Switching to Claude (or any other model) is one setting, or just say *"switch to Claude"*.
@@ -88,6 +90,16 @@ Logs go to `data/jarvis.log`.
 | "How's my computer doing?" | `system_status` (CPU, RAM, GPU, disks) |
 | "Take a screenshot" | `take_screenshot` (Pictures/Jarvis) |
 | "Lock the computer", "restart in a bit" | `lock_computer` / `power` (asks first) |
+| "Switch to Chrome", "snap VS Code left", "maximize Spotify" | `window_action` / `list_windows` |
+| "Close the Notepad window" | `close_window` (names the window and asks first) |
+| "Show the desktop", "next desktop", "open task manager", "clipboard history" | `desktop_action` |
+| "Press control S", "hit F5", "alt tab" | `press_keys` |
+| "Open Bluetooth settings", "open Windows Update" | `open_settings` (30+ Settings pages) |
+| "Open my Downloads", "open the recycle bin" | `open_folder` |
+| "What's using my memory?" | `top_processes` |
+| "Dark mode on", "switch to light mode" | `theme` |
+| "Am I on Wi-Fi?", "connect to HomeWiFi" | `wifi` |
+| "Read this to me" (selected text), "read my clipboard" | `read_aloud` (word for word, local voice) |
 | "What's on my calendar tomorrow?" / "add dentist Monday at 3" | `calendar_upcoming` / `calendar_add_event` |
 | "Any new emails?" / "read the one from Sara" | `gmail_unread` / `gmail_read` |
 | "Email Sara that I'll be late" | `gmail_find_address` → `gmail_send` (reads it back, asks first) / `gmail_draft` |
@@ -255,8 +267,10 @@ jarvis/
   stt.py           faster-whisper (CUDA → CPU fallback)
   tts.py           Piper / Kokoro / SAPI
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
-  tools/           registry.py (@tool decorator), builtin.py (workflows), google_tools.py (Calendar, Gmail),
+  tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
+                   shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget)
+scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)
   diagnostics.py   --check
 config.yaml        all settings
 tests/             offline unit tests:  python -m unittest discover tests
