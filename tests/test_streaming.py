@@ -116,6 +116,7 @@ class SpeakWhileGeneratingTests(unittest.TestCase):
         va.barge_in = False
         va.hotkey = None
         va._active = None
+        va._voice_thread = threading.current_thread()
         va.mic = mock.MagicMock()
         va.mic.muted = threading.Event()
         va.wake = mock.MagicMock()
@@ -164,6 +165,15 @@ class SpeakWhileGeneratingTests(unittest.TestCase):
         va.respond("email sara")
         self.assertEqual(asked[0][0], "Send it?")
         self.assertNotEqual(asked[0][1], "agent")
+
+    def test_other_threads_cannot_grab_the_mic(self):
+        va = self._assistant(None)
+        va._ask_yes_no = lambda q: self.fail("should not ask from a background thread")
+        result = {}
+        t = threading.Thread(target=lambda: result.update(ok=va.confirm("Shut down?")), name="routines")
+        t.start()
+        t.join(2)
+        self.assertIs(result["ok"], False)
 
 
 if __name__ == "__main__":

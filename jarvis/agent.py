@@ -43,7 +43,7 @@ class Agent:
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
             "memory": self.memory})
         self._pending_switch: str | None = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None
         self._last_activity = time.monotonic()
         self.provider: LLMProvider = self._make(provider or cfg.llm.provider)
@@ -76,11 +76,12 @@ class Agent:
             p.messages = self.memory.seed_messages()
 
     def switch(self, name: str) -> str:
-        try:
-            self.provider = self._make(name)
-        except Exception as e:
-            return f"I couldn't switch to {name}: {e}"
-        return f"Now using {self.provider.label}."
+        with self._lock:
+            try:
+                self.provider = self._make(name)
+            except Exception as e:
+                return f"I couldn't switch to {name}: {e}"
+            return f"Now using {self.provider.label}."
 
     def _request_switch(self, name: str) -> str:
         key = ALIASES.get(name.lower(), name)
