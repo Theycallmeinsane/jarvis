@@ -167,7 +167,8 @@ class TrayApp:
         from .app import VoiceAssistant
 
         try:
-            self.assistant = VoiceAssistant(self.cfg, self.llm, self.tts, on_state=self._on_state)
+            self.assistant = VoiceAssistant(self.cfg, self.llm, self.tts, on_state=self._on_state,
+                                            on_announce=lambda m: self.icon.notify(m, "Jarvis"))
             self.icon.notify('Say "Hey Jarvis".', "Jarvis is online")
             self.assistant.run()
         except Exception as e:

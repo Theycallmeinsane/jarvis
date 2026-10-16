@@ -14,6 +14,43 @@ def _row(ok: bool, name: str, detail: str):
     print(f"[{mark}] {name:<12} {detail}")
 
 
+def run_wake_test(cfg: Section) -> int:
+    """Live meter: mic level + wake-word score, to pick a good wake_word.threshold. Ctrl+C to stop."""
+    from .audio import Microphone
+    from .wakeword import WakeWordDetector
+
+    ww = cfg.wake_word
+    det = WakeWordDetector(ww.get("model", "hey_jarvis"), ww.get("threshold", 0.5), cooldown_seconds=0)
+    mic = Microphone(cfg.audio.get("input_device"))
+    mic.start()
+    thr = float(ww.get("threshold", 0.5))
+    print(f"Say \"Hey Jarvis\" a few times, near and far. Current threshold {thr:.2f}. Ctrl+C to stop.\n",
+          flush=True)
+    best, hits = 0.0, 0
+    try:
+        while True:
+            frame = mic.read(timeout=1)
+            if frame is None:
+                continue
+            scores = det.model.predict(frame)
+            score = max(scores.values()) if scores else 0.0
+            level = float(np.sqrt(np.mean(frame.astype(np.float32) ** 2)))
+            if score > 0.05:
+                best = max(best, score)
+                bar = "#" * int(score * 40)
+                fired = score >= thr
+                hits += fired
+                print(f"score {score:.2f} {bar:<40} {'WAKE' if fired else ''}  (mic level {level:.0f})", flush=True)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        mic.stop()
+    print(f"\nBest score {best:.2f}, {hits} frames over the threshold.")
+    print("If real tries peak below the threshold, lower wake_word.threshold a little; "
+          "if TV or chatter crosses it, raise it.")
+    return 0
+
+
 def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> int:
     failures = 0
 
