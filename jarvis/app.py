@@ -57,6 +57,7 @@ class VoiceAssistant:
         self.paused = threading.Event()         # tray "Pause listening"
         self.hush = threading.Event()           # tray "Stop talking"
         self._active = None                     # (sentence queue, splitter) of the reply being spoken
+        self._voice_thread = threading.current_thread()   # the thread that owns the mic (set again in run)
         self.hotkey = None
         combo = cfg.get("hotkey")
         if combo:
@@ -219,7 +220,9 @@ class VoiceAssistant:
                 log.debug("agent %.2fs", time.perf_counter() - t0)
                 q.put(None)
 
-        threading.Thread(target=work, daemon=True, name="agent").start()
+        worker = threading.Thread(target=work, daemon=True, name="agent")
+        worker.jarvis_queue = q   # lets confirm() tell this reply's thread from a stale one
+        worker.start()
         try:
             return self.speak_stream(q)
         finally:
@@ -251,10 +254,16 @@ class VoiceAssistant:
         return bool(YES.search(answer))
 
     def confirm(self, question: str) -> bool:
-        """Called by the agent (on its own thread) before a risky tool runs."""
-        active = self._active
-        if active is None or threading.current_thread().name != "agent":
+        """Called by the agent before a risky tool runs. Only one thread may use the mic at a time:
+        the voice thread asks directly, the current reply's agent thread hands the question over,
+        and anything else (an interrupted reply still finishing, a scheduled routine) is declined."""
+        me = threading.current_thread()
+        if me is self._voice_thread:
             return self._ask_yes_no(question)
+        active = self._active
+        if active is None or getattr(me, "jarvis_queue", None) is not active[0]:
+            log.info("declined %r: no one is listening for an answer", question)
+            return False
         q, splitter = active
         splitter.flush()                 # say whatever it was in the middle of first
         request = _Confirmation(question)
@@ -288,6 +297,7 @@ class VoiceAssistant:
         self._set_state("idle")
 
     def run(self):
+        self._voice_thread = threading.current_thread()
         self.mic.start()
         name = self.cfg.assistant.get("name", "Jarvis")
         print(f"\n{name} is online using {self.agent.provider.label}. Say \"Hey Jarvis\". (Ctrl+C to quit)\n")
