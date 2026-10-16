@@ -1,0 +1,79 @@
+"""Speech-to-text with faster-whisper (local; CUDA when available, CPU otherwise)."""
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+
+from .config import resolve_path
+
+log = logging.getLogger(__name__)
+
+
+def _add_nvidia_dll_dirs():
+    """On Windows, pip's nvidia-cublas/cudnn wheels put DLLs in site-packages/nvidia/*/bin."""
+    if sys.platform != "win32":
+        return
+    for base in map(Path, sys.path):
+        nv = base / "nvidia"
+        if nv.is_dir():
+            for bin_dir in nv.glob("*/bin"):
+                try:
+                    os.add_dll_directory(str(bin_dir))
+                    os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ.get("PATH", "")
+                except OSError:
+                    pass
+
+
+def _cuda_available() -> bool:
+    try:
+        import ctranslate2
+
+        return ctranslate2.get_cuda_device_count() > 0
+    except Exception:
+        return False
+
+
+class Transcriber:
+    def __init__(self, model: str = "small.en", device: str = "auto", compute_type: str = "auto",
+                 language: str | None = "en", download_root: str = "models/whisper", hints: str | None = None):
+        _add_nvidia_dll_dirs()
+        from faster_whisper import WhisperModel
+
+        self.language = language or None
+        self.hints = hints or None   # names Whisper should expect, e.g. "Jarvis, Lahore, Spotify"
+        root = str(resolve_path(download_root))
+        attempts = []
+        if device in ("auto", "cuda") and _cuda_available():
+            attempts.append(("cuda", "float16" if compute_type == "auto" else compute_type))
+        if device in ("auto", "cpu") or not attempts:
+            attempts.append(("cpu", "int8" if compute_type == "auto" else compute_type))
+
+        last_err = None
+        for dev, ctype in attempts:
+            try:
+                try:  # use the cached copy without touching the network
+                    self.model = WhisperModel(model, device=dev, compute_type=ctype, download_root=root,
+                                              local_files_only=True)
+                except Exception:
+                    self.model = WhisperModel(model, device=dev, compute_type=ctype, download_root=root)
+                # a tiny warm-up catches missing CUDA DLLs now instead of on the first command
+                segments, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32), language=self.language)
+                list(segments)  # transcription is lazy; iterate to actually run it
+                self.device = dev
+                log.info("Whisper %s on %s (%s)", model, dev, ctype)
+                return
+            except Exception as e:  # missing cuBLAS/cuDNN etc. -> fall back to CPU
+                last_err = e
+                log.warning("Whisper on %s failed (%s), trying next option", dev, e)
+        raise RuntimeError(f"Could not load Whisper model {model}: {last_err}")
+
+    def transcribe(self, audio: np.ndarray) -> str:
+        segments, _ = self.model.transcribe(
+            audio, language=self.language, beam_size=1, vad_filter=True,
+            condition_on_previous_text=False, initial_prompt=self.hints,
+        )
+        return " ".join(s.text.strip() for s in segments).strip()

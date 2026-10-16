@@ -1,0 +1,4 @@
+# Optional: run Whisper on an NVIDIA GPU (CUDA 12 runtime libraries for faster-whisper / CTranslate2).
+# ~1 GB download. Without these Jarvis falls back to CPU automatically.
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
