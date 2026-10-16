@@ -96,7 +96,34 @@ Logs go to `data/jarvis.log`.
 | "Ask Claude to explain quantum tunnelling" | `ask_claude` (local brain hands a hard question to Claude) |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
 
-### Adding your own workflow
+### Routines (multi-step workflows, no code)
+
+Define them in `config.yaml` (or `config.local.yaml`) and say *"run good morning"* / *"work mode"*:
+
+```yaml
+routines:
+  good morning:
+    say: Good morning, sir.
+    steps:
+      - get_datetime
+      - get_weather: {}
+      - calendar_upcoming: {days: 1}
+      - web_lookup: {query: top headlines today, news: true}
+    summarize: true                                   # spoken as a short briefing
+    schedule: {time: "08:00", days: [mon, tue, wed, thu, fri]}   # optional: runs by itself
+  work mode:
+    say: Work mode is on, sir.
+    steps:
+      - open_app: {name: Visual Studio Code}
+      - volume: {action: set, percent: 30}
+    summarize: false
+```
+
+Each step is any tool from the table above with its arguments. Steps you wrote yourself run without the
+"Shall I…?" question, so only put actions in a routine that you're happy to run unattended. Scheduled routines
+are announced out loud (and as a notification in tray mode) while Jarvis is running.
+
+### Adding your own workflow in Python
 
 Drop a function anywhere that gets imported (e.g. at the bottom of `jarvis/tools/builtin.py`):
 
@@ -194,6 +221,7 @@ jarvis/
   tray.py          system tray icon + menu, start-with-Windows
   agent.py         tool-calling loop, confirmation, brain switching
   memory.py        remembered facts + conversation history across restarts
+  routines.py      config-defined multi-step workflows + daily scheduler
   vision.py        screenshot → vision model (local Ollama or Claude)
   hotkey.py        global push-to-talk hotkey
   audio.py         mic stream, speaker, chimes

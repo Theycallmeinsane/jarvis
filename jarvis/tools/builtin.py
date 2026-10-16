@@ -462,6 +462,33 @@ def run_powershell(command: str):
     return out[:3000] or "(no output)"
 
 
+# ---------------------------------------------------------------- routines
+
+def _routine_names(cfg) -> str:
+    from ..routines import routines_from
+
+    return ", ".join(routines_from(cfg)) or "none"
+
+
+@tool(lambda cfg: "Run one of the user's routines (named multi-step workflows), then tell the user the "
+      f"results briefly. Routines: {_routine_names(cfg)}.",
+      {"name": {"type": "string", "description": "Routine name as the user said it"}},
+      enabled=lambda cfg: bool(cfg.get("routines")))
+def run_routine(name: str, ctx=None):
+    from ..routines import find, run_steps
+
+    hit = find(ctx.cfg, name)
+    if not hit:
+        return f"No routine called {name}. Available: {_routine_names(ctx.cfg)}."
+    key, routine = hit
+    results = run_steps(ctx, routine)
+    intro = routine.get("say", "")
+    if not routine.get("summarize", True):
+        return f"Routine {key} done." + (f" Say: {intro}" if intro else "")
+    return (f"Routine '{key}' results (summarize them as a short spoken briefing"
+            + (f", starting with: {intro}" if intro else "") + "):\n" + "\n".join(results))
+
+
 # ---------------------------------------------------------------- brains
 
 @tool("Switch Jarvis's brain / language model. 'local' = Ollama on this PC; 'claude' = Anthropic Claude; "

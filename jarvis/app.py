@@ -83,6 +83,15 @@ class VoiceAssistant:
         self.recorder = CommandRecorder(self.mic, rec.get("vad_aggressiveness", 2), rec.get("silence_ms", 800),
                                         rec.get("start_timeout_s", 6), rec.get("max_seconds", 20))
         self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm)
+        from .routines import Scheduler
+
+        self.scheduler = Scheduler(cfg, self._run_scheduled).start()
+
+    def _run_scheduled(self, name: str):
+        """A routine's scheduled time came: run it through the brain and announce the briefing."""
+        reply = self.agent.handle(f"Run my '{name}' routine now and brief me.")
+        if reply:
+            self._announce(reply)
 
     def _announce(self, message: str):
         """Timers/reminders: spoken at the next quiet moment, plus a desktop notification if available."""
@@ -339,6 +348,7 @@ class VoiceAssistant:
     def stop(self):
         self.stop_event.set()
         self.speaker.stop()
+        self.scheduler.stop()
         if self.hotkey:
             self.hotkey.stop()
 

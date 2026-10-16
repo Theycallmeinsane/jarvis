@@ -105,3 +105,23 @@ vision:                       # "look at my screen" / "what does this error say?
   enabled: true
   provider: ollama            # ollama (qwen3.5 can see, stays local) | claude
   model: null                 # null = the brain's model for that provider
+
+routines:                     # your own multi-step workflows: say "run good morning" / "work mode"
+  good morning:
+    say: Good morning, sir.
+    steps:
+      - get_datetime
+      - get_weather: {}             # {} = your location from IP; or {location: Lahore}
+      - calendar_upcoming: {days: 1}    # skipped until Google is connected
+      - web_lookup: {query: top headlines today, news: true}
+    summarize: true                 # the brain turns the results into a short briefing
+    # schedule: {time: "08:00", days: [mon, tue, wed, thu, fri]}   # uncomment to run it every weekday
+  work mode:
+    say: Work mode is on, sir.
+    steps:
+      - open_app: {name: Visual Studio Code}
+      - open_app: {name: Google Chrome}
+      - volume: {action: set, percent: 30}
+    summarize: false
+  status report:
+    steps: [system_status]
