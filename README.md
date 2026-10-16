@@ -157,6 +157,26 @@ Permissions requested: calendar events (read/add), Gmail read, and Gmail compose
 Jarvis never sends an email without reading the recipient, subject and body back to you and hearing a yes.
 Delete `secrets\google_token.json` to disconnect.
 
+## MCP servers (plug in more tools)
+
+Any [Model Context Protocol](https://modelcontextprotocol.io) server can give Jarvis new abilities (files,
+GitHub, Spotify, home automation, databases…). Add it under `mcp_servers` in `config.local.yaml`:
+
+```yaml
+mcp_servers:
+  files:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/Muhammad Hadi/Documents"]
+    tools: [read_text_file, list_directory, search_files]   # optional: only expose these
+  my-http-server:
+    url: http://localhost:8000/mcp                         # streamable-HTTP servers work too
+```
+
+Each server's tools show up as `<server>_<tool>` and work with every brain. `confirm: auto` (the default)
+asks "Shall I…?" before any tool the server doesn't mark as read-only; set `always` or `never` per server.
+Keep the allow-list short with small local models, since every tool adds to the prompt. Servers' own logs go
+to `data/mcp.log`. `tests/fixtures/demo_mcp_server.py` is a 20-line example server you can copy.
+
 ## Switching brains
 
 `config.yaml → llm.provider`:
@@ -222,6 +242,7 @@ jarvis/
   agent.py         tool-calling loop, confirmation, brain switching
   memory.py        remembered facts + conversation history across restarts
   routines.py      config-defined multi-step workflows + daily scheduler
+  mcp_client.py    MCP servers' tools as Jarvis tools
   vision.py        screenshot → vision model (local Ollama or Claude)
   hotkey.py        global push-to-talk hotkey
   audio.py         mic stream, speaker, chimes

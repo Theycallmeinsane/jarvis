@@ -125,3 +125,13 @@ routines:                     # your own multi-step workflows: say "run good mor
     summarize: false
   status report:
     steps: [system_status]
+
+# MCP servers: give Jarvis the tools of any Model Context Protocol server (see README "MCP servers").
+mcp_servers: {}
+#  files:
+#    command: npx
+#    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/Muhammad Hadi/Documents"]
+#    confirm: auto          # auto: ask before tools that aren't marked read-only | always | never
+#    tools: [read_text_file, list_directory, search_files]   # optional allow-list
+#  my-http-server:
+#    url: http://localhost:8000/mcp
