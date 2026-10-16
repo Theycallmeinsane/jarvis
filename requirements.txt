@@ -36,3 +36,6 @@ pystray>=0.19
 
 # web lookups (spoken answers from search results)
 ddgs>=9.0
+
+# MCP servers (optional tools from any Model Context Protocol server)
+mcp>=2.3

@@ -68,6 +68,11 @@ class ToolBox:
         self.cfg = cfg
         self.context = context or {}
         self.tools = {n: t for n, t in _TOOLS.items() if t.enabled is None or t.enabled(cfg)}
+        if cfg.get("mcp_servers"):
+            from ..mcp_client import mcp_tools
+
+            for t in mcp_tools(cfg):
+                self.tools.setdefault(t.name, t)
 
     def schemas(self) -> list[dict]:
         return [t.schema(self.cfg) for t in self.tools.values()]
@@ -82,6 +87,7 @@ class ToolBox:
         sig = inspect.signature(t.func)
         if "ctx" in sig.parameters:
             args = {**args, "ctx": self}
-        allowed = {k: v for k, v in args.items() if k in sig.parameters}
+        takes_any = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        allowed = args if takes_any else {k: v for k, v in args.items() if k in sig.parameters}
         result = t.func(**allowed)
         return "done" if result is None else str(result)
