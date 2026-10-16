@@ -1,6 +1,7 @@
 # Jarvis — a local voice assistant for Windows
 
 [![tests](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml/badge.svg)](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Say **"Hey Jarvis"**, ask for something, and Jarvis does it on your PC and answers out loud.
 Everything runs **locally by default**: wake word, speech-to-text, the language model and the voice.
@@ -275,3 +276,9 @@ scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also
 config.yaml        all settings
 tests/             offline unit tests:  python -m unittest discover tests
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Muhammad (Theycallmeinsane).
+
+The models Jarvis downloads (Whisper, Piper voices, openWakeWord, Kokoro, Ollama models) have their own licenses; check them before redistributing.
