@@ -20,6 +20,8 @@ wake_word:
   threshold: 0.5              # 0-1, raise if it triggers by itself, lower if it misses you
   cooldown_seconds: 1.5
 
+hotkey: ctrl+alt+j            # push-to-talk from anywhere (also interrupts); null to disable
+
 barge_in:
   enabled: true               # say "Hey Jarvis" while it's talking to interrupt
   threshold: 0.8              # stricter than normal so its own voice on speakers doesn't trigger it
@@ -98,3 +100,8 @@ google:                       # Calendar + Gmail; tools appear once the credenti
   enabled: true
   credentials_file: secrets/google_credentials.json   # OAuth client (Desktop app) from Google Cloud
   token_file: secrets/google_token.json               # created by: jarvis.bat --google-login
+
+vision:                       # "look at my screen" / "what does this error say?"
+  enabled: true
+  provider: ollama            # ollama (qwen3.5 can see, stays local) | claude
+  model: null                 # null = the brain's model for that provider
