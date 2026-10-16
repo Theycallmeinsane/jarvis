@@ -22,10 +22,22 @@ class RoutineTests(unittest.TestCase):
     def test_run_steps_reports_failures_without_stopping(self):
         cfg = _cfg({})
         box = ToolBox(cfg)
-        out = run_steps(box, {"steps": ["get_datetime", {"no_such_tool": {}}, {"read_notes": {"count": 1}}]})
+        out = run_steps(box, {"steps": ["get_datetime", {"no_such_tool": {}}, {"wait": 0.1},
+                                        {"read_notes": {"count": 1}}]})
         self.assertTrue(out[0].startswith("get_datetime: "))
         self.assertEqual(out[1], "no_such_tool: not available")
-        self.assertTrue(out[2].startswith("read_notes: "))
+        self.assertTrue(out[2].startswith("read_notes: "))   # wait adds no output
+
+    def test_example_routines_only_use_real_tools(self):
+        cfg = load_config()
+        box = ToolBox(cfg)
+        always_optional = {"calendar_upcoming"}   # needs Google
+        for name, r in cfg["routines"].items():
+            for step in r.get("steps") or []:
+                tool = step if isinstance(step, str) else next(iter(step))
+                if tool == "wait" or tool in always_optional:
+                    continue
+                self.assertIsNotNone(box.get(tool), f"routine {name!r} uses unknown tool {tool!r}")
 
     def test_run_routine_tool(self):
         cfg = _cfg({"status": {"say": "All systems.", "steps": ["get_datetime"]}})

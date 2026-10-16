@@ -46,6 +46,9 @@ def run_steps(toolbox, routine: dict) -> list[str]:
         else:
             name, args = next(iter(step.items()))
             args = args or {}
+        if name == "wait":   # - wait: 2   (seconds, e.g. to let an app finish opening)
+            time.sleep(min(float(args or 1), 60))
+            continue
         if not toolbox.get(name):
             out.append(f"{name}: not available")
             continue

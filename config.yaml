@@ -95,6 +95,7 @@ tools:
   notes_file: data/notes.md
   screenshots_dir: ~/Pictures/Jarvis
   search_dirs: [~/Desktop, ~/Documents, ~/Downloads]
+  disabled: []                # tool names never offered to the brain, e.g. [wifi, theme, power]
 
 google:                       # Calendar + Gmail; tools appear once the credentials file exists
   enabled: true
@@ -106,7 +107,8 @@ vision:                       # "look at my screen" / "what does this error say?
   provider: ollama            # ollama (qwen3.5 can see, stays local) | claude
   model: null                 # null = the brain's model for that provider
 
-routines:                     # your own multi-step workflows: say "run good morning" / "work mode"
+routines:                     # your own multi-step workflows: "run good morning", "work mode", "movie mode"
+                              # steps = any tool + its arguments, or "wait: <seconds>"
   good morning:
     say: Good morning, sir.
     steps:
@@ -119,12 +121,33 @@ routines:                     # your own multi-step workflows: say "run good mor
   work mode:
     say: Work mode is on, sir.
     steps:
+      - desktop_action: {action: minimize_all}
       - open_app: {name: Visual Studio Code}
+      - wait: 3                       # let VS Code open before snapping it
+      - window_action: {name: Visual Studio Code, action: snap_left}
       - open_app: {name: Google Chrome}
+      - wait: 2
+      - window_action: {name: chrome, action: snap_right}
       - volume: {action: set, percent: 30}
     summarize: false
+  focus mode:
+    say: Focus mode for 25 minutes, sir. I'll tell you when to take a break.
+    steps:
+      - desktop_action: {action: minimize_all}
+      - volume: {action: set, percent: 15}
+      - set_timer: {seconds: 1500, message: Focus session done. Time for a five minute break.}
+    summarize: false
+  movie mode:
+    say: Enjoy the film, sir.
+    steps:
+      - theme: {mode: dark}
+      - desktop_action: {action: minimize_all}
+      - volume: {action: set, percent: 70}
+    summarize: false
   status report:
-    steps: [system_status]
+    steps:
+      - system_status
+      - top_processes: {sort: memory, count: 3}
 
 # MCP servers: give Jarvis the tools of any Model Context Protocol server (see README "MCP servers").
 mcp_servers: {}

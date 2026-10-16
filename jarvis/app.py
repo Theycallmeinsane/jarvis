@@ -83,7 +83,8 @@ class VoiceAssistant:
         rec = cfg.recording
         self.recorder = CommandRecorder(self.mic, rec.get("vad_aggressiveness", 2), rec.get("silence_ms", 800),
                                         rec.get("start_timeout_s", 6), rec.get("max_seconds", 20))
-        self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm)
+        self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm,
+                           speak=self._speak_from_tool)
         from .routines import Scheduler
 
         self.scheduler = Scheduler(cfg, self._run_scheduled).start()
@@ -93,6 +94,18 @@ class VoiceAssistant:
         reply = self.agent.handle(f"Run my '{name}' routine now and brief me.")
         if reply:
             self._announce(reply)
+
+    def _speak_from_tool(self, text: str):
+        """read_aloud: the text joins the reply that's being spoken (or is said at the next quiet moment)."""
+        active = self._active
+        if active is None:
+            self.announcements.put(text)
+            return
+        q, splitter = active
+        splitter.flush()
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+            if sentence.strip():
+                q.put(sentence)
 
     def _announce(self, message: str):
         """Timers/reminders: spoken at the next quiet moment, plus a desktop notification if available."""
@@ -379,7 +392,7 @@ def run_text_mode(cfg: Section, llm: str | None = None, tts: str | None = None, 
         out(q)
         return bool(YES.search(input("(yes/no) > ")))
 
-    agent = Agent(cfg, notify=out, confirm=confirm, provider=llm)
+    agent = Agent(cfg, notify=out, confirm=confirm, provider=llm, speak=out)
     print(f"Text mode using {agent.provider.label}. Type 'quit' to exit, '/model claude' to switch brains.\n")
     while True:
         try:
