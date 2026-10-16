@@ -3,7 +3,7 @@ so switching brains is just swapping one object for another."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass
@@ -48,8 +48,9 @@ class LLMProvider:
     def add_user(self, text: str):
         self.messages.append({"role": "user", "content": text})
 
-    def step(self, use_tools: bool = True) -> Turn:
-        """Send the conversation, append the assistant reply to history, return it."""
+    def step(self, use_tools: bool = True, on_text: Callable[[str], None] | None = None) -> Turn:
+        """Send the conversation, append the assistant reply to history, return it.
+        If on_text is given, providers that can stream call it with each text fragment as it arrives."""
         raise NotImplementedError
 
     def add_tool_results(self, results: list[ToolResult]):

@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import threading
 import time
 from typing import Callable
 
@@ -42,6 +43,7 @@ class Agent:
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
             "memory": self.memory})
         self._pending_switch: str | None = None
+        self._lock = threading.Lock()
         self._claude_helper = None
         self._last_activity = time.monotonic()
         self.provider: LLMProvider = self._make(provider or cfg.llm.provider)
@@ -96,14 +98,21 @@ class Agent:
 
     # ------------------------------------------------------------ main entry
 
-    def handle(self, text: str) -> str:
+    def handle(self, text: str, on_text: Callable[[str], None] | None = None) -> str:
+        """Run one request. With on_text, reply text is streamed to it as it's generated
+        (including any error or brain-switch message), so speech can start early."""
+        with self._lock:  # an interrupted request may still be finishing in the background
+            return self._handle(text, on_text)
+
+    def _handle(self, text: str, on_text: Callable[[str], None] | None) -> str:
         idle_limit = float(self.cfg.assistant.get("idle_reset_minutes", 5)) * 60
         if time.monotonic() - self._last_activity > idle_limit:
             self._fresh_conversation(self.provider)
         self._last_activity = time.monotonic()
+        emit = on_text or (lambda s: None)
 
         try:
-            reply = self._run(text)
+            reply = self._run(text, on_text)
             if self.memory and reply:
                 self.memory.log_exchange(text, reply, self.provider.label)
         except Exception as e:
@@ -112,26 +121,32 @@ class Agent:
             problem = self.provider.check()
             if problem:
                 reply += " " + problem
+            emit(" " + reply)
             self._fresh_conversation(self.provider)
 
         if self._pending_switch:
             name, self._pending_switch = self._pending_switch, None
-            reply = (reply + " " if reply else "") + self.switch(name)
+            note = self.switch(name)
+            emit(" " + note)
+            reply = (reply + " " if reply else "") + note
         self._last_activity = time.monotonic()
         return reply
 
-    def _run(self, text: str) -> str:
+    def _run(self, text: str, on_text: Callable[[str], None] | None = None) -> str:
         p = self.provider
         p.add_user(text)
+        self._request = text
         # small local models tend to chain unrequested tool calls, so they get fewer rounds (config: max_tool_rounds)
         rounds = int(getattr(p, "max_tool_rounds", None) or self.cfg.assistant.get("max_tool_steps", 6))
         for _ in range(rounds):
-            turn = p.step()
+            turn = p.step(on_text=on_text)
             if not turn.tool_calls:
                 return turn.text.strip()
+            if on_text and turn.text.strip():
+                on_text(" ")   # keep "Let me check." apart from the answer that follows
             p.add_tool_results([self._execute(call) for call in turn.tool_calls])
         # out of tool rounds: ask for the spoken answer with tools switched off
-        turn = p.step(use_tools=False)
+        turn = p.step(use_tools=False, on_text=on_text)
         return turn.text.strip() or "Done, sir."
 
     def _execute(self, call) -> ToolResult:
@@ -139,6 +154,9 @@ class Agent:
         log.info("tool %s(%s)", call.name, json.dumps(call.arguments)[:200])
         if not tool:
             return ToolResult(call, f"Unknown tool {call.name}", is_error=True)
+        if not tool.allowed_for(getattr(self, "_request", "")):
+            return ToolResult(call, f"Not run: the user didn't ask for {call.name}. Answer them directly instead.",
+                              is_error=True)
         missing = [r for r in tool.parameters.get("required", []) if call.arguments.get(r) in (None, "")]
         if missing:  # small models sometimes fire tools with empty arguments
             return ToolResult(call, f"Not run: missing {', '.join(missing)}. Only call tools the user asked for.",

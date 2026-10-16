@@ -1,4 +1,5 @@
 """Offline tests: no mic, no models, no network.  Run: python -m unittest discover tests"""
+import threading
 import time
 import unittest
 from types import SimpleNamespace
@@ -88,7 +89,7 @@ class ScriptedProvider(LLMProvider):
         self.turns = list(turns)
         self.results = []
 
-    def step(self):
+    def step(self, use_tools=True, on_text=None):
         return self.turns.pop(0)
 
     def add_tool_results(self, results):
@@ -104,6 +105,7 @@ class AgentTests(unittest.TestCase):
         agent.confirm = confirm
         agent.toolbox = ToolBox(agent.cfg, {})
         agent.memory = None
+        agent._lock = threading.Lock()
         agent._pending_switch = None
         agent._last_activity = time.monotonic()
         agent.provider = ScriptedProvider(turns)
@@ -114,6 +116,18 @@ class AgentTests(unittest.TestCase):
         agent = self._agent([Turn(tool_calls=[call]), Turn(text="Okay, left it open.")], confirm=lambda q: False)
         self.assertEqual(agent.handle("close it"), "Okay, left it open.")
         self.assertIn("declined", agent.provider.results[0].content)
+
+    def test_trigger_words_block_unrequested_actions(self):
+        box = ToolBox(load_config())
+        search = box.get("web_search")
+        self.assertFalse(search.allowed_for("tell me a long story about a robot"))
+        self.assertTrue(search.allowed_for("search YouTube for lofi"))
+        self.assertTrue(box.get("open_app").allowed_for("could you launch spotify"))
+        self.assertTrue(box.get("get_weather").allowed_for("anything at all"))   # info tools are unrestricted
+        call = ToolCall("1", "web_search", {"query": "robot story"})
+        agent = self._agent([Turn(tool_calls=[call]), Turn(text="Once upon a time...")], lambda q: True)
+        agent.handle("tell me a story")
+        self.assertIn("didn't ask", agent.provider.results[0].content)
 
     def test_unknown_tool_is_reported_as_error(self):
         agent = self._agent([Turn(tool_calls=[ToolCall("1", "fly", {})]), Turn(text="Can't.")], lambda q: True)

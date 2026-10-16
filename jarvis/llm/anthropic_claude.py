@@ -32,7 +32,24 @@ class ClaudeProvider(LLMProvider):
             return "No ANTHROPIC_API_KEY found. Add it to the .env file."
         return None
 
-    def step(self, use_tools: bool = True) -> Turn:
+    def _create(self, **kwargs):
+        if self._fallback:
+            return self.client.beta.messages.create(
+                betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs)
+        return self.client.messages.create(**kwargs)
+
+    def _stream(self, on_text, **kwargs):
+        # Tool inputs here are tiny (a city, a timer length), so they're left buffered
+        # (no eager_input_streaming); only the spoken text needs to arrive early.
+        manager = (self.client.beta.messages.stream(betas=["server-side-fallback-2026-07-01"],
+                                                    fallbacks="default", **kwargs)
+                   if self._fallback else self.client.messages.stream(**kwargs))
+        with manager as stream:
+            for text in stream.text_stream:
+                on_text(text)
+            return stream.get_final_message()
+
+    def step(self, use_tools: bool = True, on_text=None) -> Turn:
         kwargs = dict(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -43,11 +60,7 @@ class ClaudeProvider(LLMProvider):
             tool_choice={"type": "auto"} if use_tools else {"type": "none"},
             output_config={"effort": self.effort},
         )
-        if self._fallback:
-            response = self.client.beta.messages.create(
-                betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs)
-        else:
-            response = self.client.messages.create(**kwargs)
+        response = self._stream(on_text, **kwargs) if on_text else self._create(**kwargs)
 
         # keep the full content (thinking blocks included) so the history stays valid
         self.messages.append({
@@ -74,9 +87,5 @@ class ClaudeProvider(LLMProvider):
         kwargs = dict(model=self.model, max_tokens=self.max_tokens, system=self.system_prompt,
                       messages=[{"role": "user", "content": question}],
                       output_config={"effort": self.effort})
-        if self._fallback:
-            response = self.client.beta.messages.create(
-                betas=["server-side-fallback-2026-07-01"], fallbacks="default", **kwargs)
-        else:
-            response = self.client.messages.create(**kwargs)
+        response = self._create(**kwargs)
         return " ".join(b.text for b in response.content if b.type == "text")
