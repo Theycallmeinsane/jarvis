@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class Tool:
     name: str
-    description: str
+    description: str | Callable[[Any], str]   # a callable gets the config (e.g. to list routine names)
     parameters: dict
     func: Callable[..., Any]
     dangerous: bool = False          # ask for confirmation before running
@@ -28,8 +28,9 @@ class Tool:
             return True
         return bool(re.search(r"\b(" + "|".join(self.triggers) + r")", request, re.I))
 
-    def schema(self) -> dict:
-        return {"name": self.name, "description": self.description, "parameters": self.parameters}
+    def schema(self, cfg=None) -> dict:
+        desc = self.description(cfg) if callable(self.description) else self.description
+        return {"name": self.name, "description": desc, "parameters": self.parameters}
 
     def confirmation(self, args: dict) -> str:
         if self.confirm:
@@ -41,7 +42,7 @@ class Tool:
 _TOOLS: dict[str, Tool] = {}
 
 
-def tool(description: str, params: dict[str, dict] | None = None, required: list[str] | None = None,
+def tool(description: str | Callable[[Any], str], params: dict[str, dict] | None = None, required: list[str] | None = None,
          dangerous: bool = False, enabled: Callable[[Any], bool] | None = None, name: str | None = None,
          confirm: Callable[[dict], str] | None = None, triggers: tuple[str, ...] = ()):
     """Register a tool. `params` maps argument name -> JSON-schema snippet."""
@@ -69,7 +70,7 @@ class ToolBox:
         self.tools = {n: t for n, t in _TOOLS.items() if t.enabled is None or t.enabled(cfg)}
 
     def schemas(self) -> list[dict]:
-        return [t.schema() for t in self.tools.values()]
+        return [t.schema(self.cfg) for t in self.tools.values()]
 
     def get(self, name: str) -> Tool | None:
         return self.tools.get(name)
