@@ -7,6 +7,7 @@ import difflib
 import json
 import logging
 import os
+import re
 import subprocess
 import threading
 import time
@@ -349,18 +350,27 @@ def read_notes(count: int = 5, ctx=None):
 @tool("Find files by name in Desktop, Documents and Downloads.",
       {"name": {"type": "string", "description": "Part of the file name"}})
 def find_files(name: str, ctx=None):
-    q = name.lower()
+    # spoken queries like "resume pdf" should match "Resume_Muhammad.pdf": every word must appear
+    words = [w for w in re.split(r"[\s_.-]+", name.lower()) if w]
+    norm = lambda f: re.sub(r"[\s_.-]+", " ", f.lower())  # noqa: E731
     hits: list[Path] = []
+    deadline = time.monotonic() + 4    # big folders: give up rather than stall the conversation
     for d in ctx.cfg.tools.get("search_dirs", []):
-        root = resolve_path(d)
-        for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [x for x in dirnames if not x.startswith(".") and x not in ("node_modules", ".venv")]
-            hits += [Path(dirpath) / f for f in filenames if q in f.lower()]
-            if len(hits) >= 10:
+        for dirpath, dirnames, filenames in os.walk(resolve_path(d)):
+            dirnames[:] = [x for x in dirnames if not x.startswith(".") and x not in ("node_modules", ".venv",
+                                                                                     "__pycache__")]
+            hits += [Path(dirpath) / f for f in filenames if all(w in norm(f) for w in words)]
+            if len(hits) >= 25 or time.monotonic() > deadline:
                 break
     if not hits:
         return f"No files matching {name}."
-    hits.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+
+    def mtime(p: Path) -> float:
+        try:
+            return p.stat().st_mtime
+        except OSError:
+            return 0.0
+    hits.sort(key=mtime, reverse=True)
     return "\n".join(str(p) for p in hits[:10])
 
 
@@ -381,7 +391,8 @@ def read_clipboard():
 
 @tool("Copy text to the clipboard.", {"text": {"type": "string"}})
 def copy_to_clipboard(text: str):
-    subprocess.run(["clip"], input=text.encode("utf-16-le"), check=True, creationflags=NO_WINDOW)
+    # clip.exe only reads UTF-16 correctly when the byte-order mark is present
+    subprocess.run(["clip"], input=b"\xff\xfe" + text.encode("utf-16-le"), check=True, creationflags=NO_WINDOW)
     return "Copied to clipboard."
 
 
@@ -403,10 +414,11 @@ class _INPUT(ctypes.Structure):
 def type_text(text: str):
     KEYEVENTF_UNICODE, KEYEVENTF_KEYUP = 0x0004, 0x0002
     time.sleep(0.3)
-    for ch in text:
+    raw = text.encode("utf-16-le")   # UTF-16 code units, so emoji go through as surrogate pairs
+    for unit in (int.from_bytes(raw[i:i + 2], "little") for i in range(0, len(raw), 2)):
         for flags in (KEYEVENTF_UNICODE, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP):
             inp = _INPUT(type=1)
-            inp.ki = _KEYBDINPUT(0, ord(ch), flags, 0, None)
+            inp.ki = _KEYBDINPUT(0, unit, flags, 0, None)
             ctypes.windll.user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT))
     return "Typed it."
 

@@ -23,6 +23,19 @@ class ToolSchemaTests(unittest.TestCase):
             for r in s["parameters"]["required"]:
                 self.assertIn(r, s["parameters"]["properties"])
 
+    def test_find_files_matches_all_spoken_words(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d:
+            for f in ("Resume_Muhammad.pdf", "resume-old.docx", "notes.txt"):
+                (Path(d) / f).write_text("x")
+            cfg = load_config()
+            cfg["tools"] = {**cfg["tools"], "search_dirs": [d]}
+            out = ToolBox(cfg).run("find_files", {"name": "resume pdf"})
+            self.assertIn("Resume_Muhammad.pdf", out)
+            self.assertNotIn("resume-old.docx", out)
+
     def test_run_injects_context(self):
         box = ToolBox(load_config())
         self.assertIn("timer", box.run("list_timers", {}).lower())
