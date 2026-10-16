@@ -211,6 +211,10 @@ audio: {input_device: HyperX}
 ## Tuning
 
 * **Wake word too eager / too deaf:** `wake_word.threshold` (0.5 default; 0.6–0.7 if it fires on TV).
+  `.\jarvis.bat --wake-test` shows live scores so you can pick the value.
+* **A different wake word:** train one with openWakeWord's training notebook (linked from the
+  [openWakeWord README](https://github.com/dscripka/openWakeWord)) and set `wake_word.model` to the
+  path of the `.onnx` file.
 * **Cuts you off mid-sentence:** raise `recording.silence_ms` (800 → 1200).
 * **Mishears names:** add them to `stt.hints` (e.g. city, app and people names).
 * **Local model does extra things you didn't ask for:** keep `max_tool_rounds: 1` (default for Ollama/LM Studio);
