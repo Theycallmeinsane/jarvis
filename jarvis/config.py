@@ -25,6 +25,12 @@ class Section(dict):
         return Section(self.get(key) or {})
 
 
+def local_url(url: str) -> str:
+    """'localhost' -> 127.0.0.1. On Windows, 'localhost' tries IPv6 first and waits ~2 s before falling
+    back to IPv4 (where Ollama and LM Studio listen) — on every single request."""
+    return url.replace("://localhost", "://127.0.0.1") if url else url
+
+
 def resolve_path(p: str | os.PathLike) -> Path:
     """Expand ~ and make relative paths relative to the project root."""
     path = Path(os.path.expanduser(str(p)))

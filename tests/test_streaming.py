@@ -109,7 +109,10 @@ class SpeakWhileGeneratingTests(unittest.TestCase):
         from jarvis.app import VoiceAssistant
 
         va = VoiceAssistant.__new__(VoiceAssistant)
-        va.cfg = {"recording": {}}
+        from jarvis.config import Section
+
+        va.cfg = Section({"recording": {}, "assistant": {"ack_after_seconds": 0}})
+        va._heard_at = None
         va.on_state = lambda s: None
         va.state = "idle"
         va.stop_event, va.paused, va.hush = threading.Event(), threading.Event(), threading.Event()

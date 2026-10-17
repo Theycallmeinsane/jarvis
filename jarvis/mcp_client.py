@@ -20,7 +20,7 @@ import sys
 import threading
 from typing import Any
 
-from .config import ROOT
+from .config import ROOT, local_url
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class MCPManager:
         if spec.get("url"):
             from mcp.client.streamable_http import streamable_http_client
 
-            return streamable_http_client(spec["url"])
+            return streamable_http_client(local_url(spec["url"]))
         from mcp import StdioServerParameters
         from mcp.client.stdio import stdio_client
 
