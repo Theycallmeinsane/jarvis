@@ -83,7 +83,27 @@ def _me() -> str:
     return _login
 
 
+def _accounts() -> list[str]:
+    """Every github.com account `gh auth login` knows on this PC, the active one first."""
+    exe = gh_path()
+    if not exe:
+        return []
+    try:
+        out = subprocess.run([exe, "auth", "status", "--hostname", "github.com"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", timeout=10, creationflags=NO_WINDOW)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    text = (out.stdout or "") + (out.stderr or "")
+    names = re.findall(r"account (\S+)", text) or re.findall(r"Logged in to github\.com as (\S+)", text)
+    try:
+        me = _me()
+    except GitHubError:
+        me = None
+    return list(dict.fromkeys([*([me] if me else []), *names]))
+
+
 def _my_repos() -> list[str]:
+    """Repos of the active gh account, then of any other signed-in account (people often have two)."""
     global _repo_cache
     if time.time() - _repo_cache[0] < 600 and _repo_cache[1]:
         return _repo_cache[1]
@@ -91,8 +111,13 @@ def _my_repos() -> list[str]:
         names = gh_json("api", "user/repos?per_page=100&sort=pushed", "--jq", "[.[].full_name]")
     except (GitHubError, ValueError, KeyError):
         names = []
-    _repo_cache = (time.time(), names)
-    return names
+    for acct in _accounts()[1:]:
+        try:
+            names += gh_json("api", f"users/{acct}/repos?per_page=100&sort=pushed", "--jq", "[.[].full_name]")
+        except (GitHubError, ValueError, KeyError):
+            pass
+    _repo_cache = (time.time(), list(dict.fromkeys(names)))
+    return _repo_cache[1]
 
 
 def _spoken(s: str) -> str:
@@ -114,7 +139,9 @@ def resolve_repo(cfg, repo: str = "") -> str:
         return repo
     known = list(dict.fromkeys([*(g.get("watch") or []), *([g["default_repo"]] if g.get("default_repo") else []),
                                 *_my_repos()]))
-    by_name = {_spoken(k.split("/", 1)[1]): k for k in known}
+    by_name: dict[str, str] = {}
+    for k in known:                       # first wins: your settings, then the active account, then the others
+        by_name.setdefault(_spoken(k.split("/", 1)[1]), k)
     key = _spoken(repo)
     if key in by_name:
         return by_name[key]

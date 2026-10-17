@@ -39,12 +39,7 @@ class FileToolTests(unittest.TestCase):
         self.cfg = Section(load_config())
         self.cfg["files"] = {"allowed_roots": [str(self.root)], "protected": []}
         self.ctx = Ctx(self.cfg)
-        # on Windows the temp folder lives under AppData, which is protected: keep the rest of the rules
-        real = fx.protected_paths
-        p = mock.patch.object(fx, "protected_paths", side_effect=lambda cfg: [
-            x for x in real(cfg) if not fx._inside(self.root, x)])
-        p.start()
-        self.addCleanup(p.stop)
+        # on Windows this temp folder is under protected AppData; allowing it explicitly must still work
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -112,6 +107,16 @@ class FileToolTests(unittest.TestCase):
         with self.assertRaises(ToolFailed):
             fx.check_writable(fx.ROOT / "config.yaml", Section({"files": {"allowed_roots": [str(fx.ROOT.parent)]}}))
 
+    def test_an_allowed_folder_inside_a_protected_one_wins(self):
+        target = self.root / "Documents" / "new"
+        with mock.patch.object(fx, "_soft_protected", return_value=[self.root.parent]):
+            fx.check_writable(target, self.cfg)                              # explicit root inside it: allowed
+            with self.assertRaises(ToolFailed):
+                fx.check_writable(target, Section({"files": {"allowed_roots": "auto"}}))
+        with self.assertRaises(ToolFailed):                                  # Windows and Jarvis itself: never
+            fx.check_writable(fx.ROOT / "scratch" / "x",
+                              Section({"files": {"allowed_roots": [str(fx.ROOT / "scratch")]}}))
+
     def test_organize_counts_and_skips_partial_downloads(self):
         q = fx._organize_question({"path": str(self.root / "Downloads")})
         self.assertIn("5 files", q)
@@ -165,6 +170,17 @@ class GitHubToolTests(unittest.TestCase):
             self.assertEqual(gt.resolve_repo(self.cfg, "my resume screener repo"), "me/resume-screener")
             self.assertEqual(gt.resolve_repo(self.cfg, "Jarvis"), "me/jarvis")
             self.assertEqual(gt.resolve_repo(self.cfg, "other/thing"), "other/thing")
+
+    def test_repos_of_a_second_signed_in_account_are_found(self):
+        def fake_json(*args, **kw):
+            return {"user/repos?per_page=100&sort=pushed": ["work/api"],
+                    "users/owner/repos?per_page=100&sort=pushed": ["owner/jarvis"]}[args[1]]
+        self.cfg["github"]["watch"] = []
+        gt._repo_cache = (0.0, [])
+        self.addCleanup(setattr, gt, "_repo_cache", (0.0, []))
+        with mock.patch.object(gt, "_accounts", return_value=["work", "owner"]), \
+                mock.patch.object(gt, "gh_json", side_effect=fake_json):
+            self.assertEqual(gt.resolve_repo(self.cfg, "jarvis"), "owner/jarvis")
 
     def test_builds_and_failure_excerpt(self):
         data = runs({"databaseId": 7, "conclusion": "failure", "displayTitle": "Add files"},

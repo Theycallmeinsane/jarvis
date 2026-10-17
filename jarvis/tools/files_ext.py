@@ -245,11 +245,21 @@ def protected_paths(cfg) -> list[Path]:
     env = os.environ
     found = [Path(env.get("SystemRoot", sysdrive / "Windows")), Path(env.get("ProgramFiles", sysdrive / "Program Files")),
              Path(env.get("ProgramFiles(x86)", sysdrive / "Program Files (x86)")),
-             Path(env.get("ProgramData", sysdrive / "ProgramData")), Path.home() / "AppData", ROOT]
+             Path(env.get("ProgramData", sysdrive / "ProgramData")), ROOT]
     for d in _fixed_drives() or [sysdrive]:
         found += [d / "$Recycle.Bin", d / "System Volume Information", d / "Recovery"]
+    return found + _soft_protected(cfg)
+
+
+def _soft_protected(cfg) -> list[Path]:
+    """Protected unless you allowed a folder inside them on purpose (e.g. a scratch folder under %TEMP%)."""
     extra = (cfg.get("files") or {}).get("protected") or [] if cfg is not None else []
-    return found + [Path(os.path.expandvars(os.path.expanduser(p))) for p in extra]
+    return [Path.home() / "AppData"] + [Path(os.path.expandvars(os.path.expanduser(p))) for p in extra]
+
+
+def _explicit_roots(cfg) -> list[Path]:
+    roots = (cfg.get("files") or {}).get("allowed_roots", "auto") if cfg is not None else "auto"
+    return [] if roots in (None, "auto", ["auto"]) else allowed_roots(cfg)
 
 
 def _inside(p: Path, root: Path) -> bool:
@@ -263,8 +273,11 @@ def _inside(p: Path, root: Path) -> bool:
 def check_writable(p: Path, cfg, what: str = "change") -> None:
     """Raise ToolFailed (said to the user) unless Jarvis may create/modify/remove `p`."""
     rp = p.resolve()
+    soft = {s.resolve() for s in _soft_protected(cfg)}
     for prot in protected_paths(cfg):
         if _inside(rp, prot):
+            if prot.resolve() in soft and any(_inside(r, prot) and _inside(rp, r) for r in _explicit_roots(cfg)):
+                continue                      # a folder you allowed inside it wins over the general rule
             raise ToolFailed(f"{prot} is a protected folder, so I won't {what} anything in it.")
     if rp == rp.parent or rp == Path.home().resolve() or any(rp == r.resolve() for r in allowed_roots(cfg)):
         raise ToolFailed(f"I won't {what} {rp} itself, only things inside it.")
@@ -472,7 +485,7 @@ def read_file(path: str, max_chars: int = 6000, ctx=None):
         raise ToolFailed(f"{p.name} is a folder. Ask me what's in it instead.")
     if p.stat().st_size > 200 * 2**20:
         raise ToolFailed(f"{p.name} is {human_size(p.stat().st_size)}, too big to read aloud.")
-    limit = max(500, min(max_chars, 20000))
+    limit = max(1, min(max_chars, 20000))
     text = _read_text(p, limit)
     cut = len(text) > limit
     return f"Contents of {p.name}{' (first part)' if cut else ''}:\n{text[:limit]}"
