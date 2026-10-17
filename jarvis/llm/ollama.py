@@ -6,16 +6,18 @@ from typing import Callable
 
 import requests
 
+from ..config import local_url
+
 from .base import LLMProvider, ToolCall, ToolResult, Turn
 
 
 class OllamaProvider(LLMProvider):
     name = "ollama"
 
-    def __init__(self, *, base_url: str = "http://localhost:11434", model: str = "qwen3.5:4b",
+    def __init__(self, *, base_url: str = "http://127.0.0.1:11434", model: str = "qwen3.5:4b",
                  think: bool = False, keep_alive: str = "30m", num_ctx: int = 8192, **kw):
         super().__init__(**kw)
-        self.base_url = base_url.rstrip("/")
+        self.base_url = local_url(base_url).rstrip("/")
         self.model = model
         self.think = think
         self.keep_alive = keep_alive

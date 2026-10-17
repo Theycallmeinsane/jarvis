@@ -24,6 +24,7 @@ class ToolResult:
     call: ToolCall
     content: str
     is_error: bool = False
+    spoken: str | None = None    # if set, this is the honest sentence to say for this call
 
 
 class LLMProvider:
@@ -47,6 +48,10 @@ class LLMProvider:
 
     def add_user(self, text: str):
         self.messages.append({"role": "user", "content": text})
+
+    def add_assistant_text(self, text: str):
+        """Record a reply Jarvis gave without the model (fast path / direct tool result)."""
+        self.messages.append({"role": "assistant", "content": text})
 
     def step(self, use_tools: bool = True, on_text: Callable[[str], None] | None = None) -> Turn:
         """Send the conversation, append the assistant reply to history, return it.

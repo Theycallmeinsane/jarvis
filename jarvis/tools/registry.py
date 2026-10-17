@@ -10,6 +10,10 @@ from typing import Any, Callable
 log = logging.getLogger(__name__)
 
 
+class Spoken(str):
+    """Return this from a tool to have its text said to the user directly, without the brain rephrasing it."""
+
+
 @dataclass
 class Tool:
     name: str
@@ -93,4 +97,6 @@ class ToolBox:
         takes_any = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
         allowed = args if takes_any else {k: v for k, v in args.items() if k in sig.parameters}
         result = t.func(**allowed)
-        return "done" if result is None else str(result)
+        if result is None:
+            return "done"
+        return result if isinstance(result, str) else str(result)   # keeps Spoken

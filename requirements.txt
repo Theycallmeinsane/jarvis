@@ -42,3 +42,9 @@ ddgs>=9.0
 
 # MCP servers (optional tools from any Model Context Protocol server)
 mcp>=2.3
+
+# Windows media session API (verified play/pause/next, what's playing)
+winrt-runtime>=3.2
+winrt-Windows.Media.Control>=3.2
+winrt-Windows.Foundation>=3.2
+winrt-Windows.Foundation.Collections>=3.2

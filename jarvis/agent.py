@@ -29,8 +29,19 @@ Do exactly what the latest request asks and nothing more: never start actions th
 and don't re-check your own work (no listing timers right after setting one, no reading notes right after \
 saving one). web_search already opens the browser by itself.
 
-The speech-to-text may mishear words; infer the most likely intent from context.
+The speech-to-text may mishear words; infer the most likely intent from context, but if a request is \
+garbled or doesn't clearly ask for an action, ask what they meant instead of guessing an action.
 Today is {today}."""
+
+# Tools whose result is already the spoken answer ("Paused Spotify.", "Volume set to 30%."):
+# when a turn only used these, their result is said directly instead of asking the brain to rephrase it
+# (one model call instead of two, and no chance to "improve" a failure into a success).
+SPEAKS_RESULT = {
+    "media_control", "volume", "open_app", "open_website", "web_search", "set_timer", "cancel_timer",
+    "lock_computer", "take_screenshot", "take_note", "copy_to_clipboard", "type_text", "window_action",
+    "close_window", "desktop_action", "press_keys", "open_settings", "open_folder", "theme", "switch_voice",
+    "close_app", "power", "open_path",
+}
 
 
 class Agent:
@@ -118,7 +129,18 @@ class Agent:
         emit = on_text or (lambda s: None)
 
         try:
-            reply = self._run(text, on_text)
+            t0 = time.perf_counter()
+            plan = None
+            if (self.cfg.get("router") or {}).get("enabled", True):
+                from .router import route
+
+                plan = route(text, self.toolbox, self.cfg)
+            if plan:
+                reply = self._run_direct(text, plan, on_text)
+                log.info("fast path %s in %.2fs", [n for n, _ in plan], time.perf_counter() - t0)
+            else:
+                reply = self._run(text, on_text)
+                log.info("brain (%s) answered in %.2fs", self.provider.label, time.perf_counter() - t0)
             if self.memory and reply:
                 self.memory.log_exchange(text, reply, self.provider.label)
         except Exception as e:
@@ -150,30 +172,69 @@ class Agent:
                 return turn.text.strip()
             if on_text and turn.text.strip():
                 on_text(" ")   # keep "Let me check." apart from the answer that follows
-            p.add_tool_results([self._execute(call) for call in turn.tool_calls])
+            results = [self._execute(call) for call in turn.tool_calls]
+            p.add_tool_results(results)
+            direct = self._direct_reply(results)
+            if direct:   # simple actions: say what really happened, no second model call
+                p.add_assistant_text(direct)
+                if on_text:
+                    on_text(direct)
+                return direct
         # out of tool rounds: ask for the spoken answer with tools switched off
         turn = p.step(use_tools=False, on_text=on_text)
         return turn.text.strip() or "Done."
 
-    def _execute(self, call) -> ToolResult:
+    @staticmethod
+    def _direct_reply(results: list[ToolResult]) -> str | None:
+        spoken = [r.spoken for r in results]
+        return " ".join(spoken) if spoken and all(spoken) else None
+
+    def _run_direct(self, text: str, plan: list[tuple[str, dict]], on_text) -> str:
+        """Fast path: the router already knows which tool to run; no model call at all."""
+        from .llm import ToolCall
+
+        self._request = text
+        results = [self._execute(ToolCall(f"fast_{i}", name, args), gate=False)
+                   for i, (name, args) in enumerate(plan)]
+        reply = self._direct_reply(results) or " ".join(r.content for r in results)
+        self.provider.add_user(text)
+        self.provider.add_assistant_text(reply)   # so follow-ups ("and louder") have context
+        if on_text:
+            on_text(reply)
+        return reply
+
+    def _execute(self, call, gate: bool = True) -> ToolResult:
         tool = self.toolbox.get(call.name)
         log.info("tool %s(%s)", call.name, json.dumps(call.arguments)[:200])
         if not tool:
             return ToolResult(call, f"Unknown tool {call.name}", is_error=True)
-        if not tool.allowed_for(getattr(self, "_request", "")):
-            return ToolResult(call, f"Not run: the user didn't ask for {call.name}. Answer them directly instead.",
+        if gate and not tool.allowed_for(getattr(self, "_request", "")):
+            log.info("  gate: %s not run (request doesn't mention it)", call.name)
+            return ToolResult(call, f"NOT DONE: {call.name} was not run because the request didn't ask for it. "
+                                    "Nothing happened on the PC. Do not say you did it; answer directly or ask.",
                               is_error=True)
         missing = [r for r in tool.parameters.get("required", []) if call.arguments.get(r) in (None, "")]
         if missing:  # small models sometimes fire tools with empty arguments
             return ToolResult(call, f"Not run: missing {', '.join(missing)}. Only call tools the user asked for.",
                               is_error=True)
+        speaks = call.name in SPEAKS_RESULT
         if tool.dangerous and self.cfg.tools.get("confirm_dangerous", True):
             if not self.confirm(tool.confirmation(call.arguments)):
-                return ToolResult(call, "The user declined; nothing was done.")
+                return ToolResult(call, "The user declined; nothing was done.",
+                                  spoken="Okay, I've left it." if speaks else None)
+        t0 = time.perf_counter()
         try:
             out = self.toolbox.run(call.name, call.arguments)
-            log.info("  -> %s", out[:200])
-            return ToolResult(call, out)
+            log.info("  -> %s (%.2fs)", out[:200], time.perf_counter() - t0)
+            from .tools import Spoken
+
+            direct = out if (speaks or isinstance(out, Spoken)) else None
+            return ToolResult(call, out, spoken=direct)
         except Exception as e:
+            from .tools.builtin import ToolFailed
+
             log.warning("tool %s failed: %s", call.name, e)
-            return ToolResult(call, f"Error: {e}", is_error=True)
+            if isinstance(e, ToolFailed):   # an expected failure, already phrased for the user
+                return ToolResult(call, f"Failed: {e}", is_error=True, spoken=str(e))
+            return ToolResult(call, f"Error: {e}", is_error=True,
+                              spoken=f"That didn't work: {e}" if speaks else None)

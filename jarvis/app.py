@@ -59,6 +59,7 @@ class VoiceAssistant:
         self.hush = threading.Event()           # tray "Stop talking"
         self._active = None                     # (sentence queue, splitter) of the reply being spoken
         self._voice_thread = threading.current_thread()   # the thread that owns the mic (set again in run)
+        self._heard_at: float | None = None               # when the last command finished transcribing
         self.hotkey = None
         combo = cfg.get("hotkey")
         if combo:
@@ -152,7 +153,7 @@ class VoiceAssistant:
         q.put(None)
         return self.speak_stream(q)
 
-    def speak_stream(self, sentences: "queue.Queue[str | None]") -> bool:
+    def speak_stream(self, sentences: "queue.Queue[str | None]", ack_after: float | None = None) -> bool:
         """Speak sentences as they arrive on the queue (None ends it), synthesizing the next one while
         the current one plays. The mic keeps listening for "Hey Jarvis" the whole time (barge-in),
         including while the reply is still being generated.
@@ -168,6 +169,8 @@ class VoiceAssistant:
         playing_until = 0.0
         finished = False
         spoke = False
+        acked = False
+        started = time.monotonic()
         try:
             while True:
                 now = time.monotonic()
@@ -177,7 +180,17 @@ class VoiceAssistant:
                     self._set_state("speaking")
                     self.speaker.play(audio, sr, blocking=False)
                     playing_until = now + len(audio) / sr
+                    if not spoke and self._heard_at:
+                        log.info("first words %.2fs after you stopped talking", time.perf_counter() - self._heard_at)
+                        self._heard_at = None
                     spoke = True
+                if (ack_after and not spoke and not acked and ready is None and not finished
+                        and now - started > ack_after):
+                    # the brain is taking a while: say something short so it doesn't feel dead
+                    acked = True
+                    phrase = (self.cfg.assistant.get("ack_phrase") or "").strip()
+                    ready = self.tts.synthesize(phrase) if phrase else (CHIME_LISTEN, CHIME_SR)
+                    continue
                 if ready is None and not finished:
                     try:
                         item = sentences.get_nowait()
@@ -251,7 +264,7 @@ class VoiceAssistant:
         worker.jarvis_queue = q   # lets confirm() tell this reply's thread from a stale one
         worker.start()
         try:
-            return self.speak_stream(q)
+            return self.speak_stream(q, ack_after=float(self.cfg.assistant.get("ack_after_seconds") or 0) or None)
         finally:
             self._active = None
 
@@ -267,7 +280,9 @@ class VoiceAssistant:
                 return None
             t0 = time.perf_counter()
             text = WAKE_PREFIX.sub("", self.stt.transcribe(audio)).strip()
-            log.debug("STT %.2fs: %r", time.perf_counter() - t0, text)
+            self._heard_at = time.perf_counter()
+            log.info("heard %r (%.1fs of speech, transcribed in %.2fs)", text, len(audio) / 16000,
+                     self._heard_at - t0)
             if (text.lower() in HALLUCINATIONS or not re.search(r"\w", text)
                     or re.sub(r"\W", "", text.lower()) in WAKE_TAILS):
                 continue

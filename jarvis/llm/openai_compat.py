@@ -7,6 +7,8 @@ from typing import Callable
 
 import requests
 
+from ..config import local_url
+
 from .base import LLMProvider, ToolCall, ToolResult, Turn
 
 
@@ -15,7 +17,7 @@ class OpenAICompatProvider(LLMProvider):
 
     def __init__(self, *, base_url: str, model: str, api_key_env: str | None = None, **kw):
         super().__init__(**kw)
-        self.base_url = base_url.rstrip("/")
+        self.base_url = local_url(base_url).rstrip("/")
         self.model = model
         key = os.environ.get(api_key_env) if api_key_env else None
         self.headers = {"Authorization": f"Bearer {key or 'not-needed'}"}

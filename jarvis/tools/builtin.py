@@ -18,7 +18,7 @@ from pathlib import Path
 import requests
 
 from ..config import resolve_path
-from .registry import tool
+from .registry import Spoken, tool
 
 log = logging.getLogger(__name__)
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
@@ -37,7 +37,7 @@ def _ps(command: str, timeout: int = 20) -> str:
 @tool("Get the current local date and time.")
 def get_datetime():
     now = dt.datetime.now()
-    return now.strftime("%A, %d %B %Y, %I:%M %p")
+    return Spoken("It's " + now.strftime("%I:%M %p on %A, %d %B %Y").lstrip("0") + ".")
 
 
 @tool("Report computer health: CPU, memory, GPU, disk space and battery.")
@@ -103,7 +103,12 @@ def wikipedia_summary(topic: str):
       "release dates, anything after your training data). Doesn't open a browser.",
       {"query": {"type": "string"},
        "news": {"type": "boolean", "description": "true for latest news / headlines"}},
-      required=["query"], enabled=lambda cfg: cfg.tools.get("web_lookup", True))
+      required=["query"], enabled=lambda cfg: cfg.tools.get("web_lookup", True),
+      # only for things that change: well-known facts ("capital of Japan") are answered directly
+      triggers=("latest", "news", "today", "current", "now", "recent", "price", "cost", "score", "won", "winner",
+                "release", "update", "search", "look up", "lookup", "google", "online", "internet", "web",
+                "this week", "this year", "yesterday", "tonight", "tomorrow", "stock", "2025", "2026", "2027",
+                "who is the", "what happened", "trending", "headline"))
 def web_lookup(query: str, news: bool = False):
     from ddgs import DDGS
 
@@ -223,15 +228,30 @@ def _key(vk: int):
     user32.keybd_event(vk, 0, 1 | 2, 0)      # + KEYEVENTF_KEYUP
 
 
-MEDIA_KEYS = {"play_pause": 0xB3, "next": 0xB0, "previous": 0xB1, "stop": 0xB2}
+MEDIA_ACTIONS = ["play", "pause", "toggle", "next", "previous", "status"]
 
 
-@tool("Control media playback (Spotify, YouTube, any player).",
-      {"action": {"type": "string", "enum": list(MEDIA_KEYS)}},
-      triggers=("play", "pause", "stop", "next", "skip", "previous", "resume", "music", "song", "track", "back"))
-def media_control(action: str):
-    _key(MEDIA_KEYS[action])
-    return f"Media {action.replace('_', ' ')}."
+class ToolFailed(Exception):
+    """A tool couldn't do what was asked; the message is said to the user as-is."""
+
+
+@tool("Control music/video playback and check what's playing (Spotify, YouTube in a browser, any player). "
+      "Starts Spotify if asked to play on it and it's closed. The result says what really happened.",
+      {"action": {"type": "string", "enum": MEDIA_ACTIONS,
+                  "description": "status = what's playing now; stop = pause"},
+       "app": {"type": "string", "description": "Only if the user named one, e.g. 'spotify'"}},
+      required=["action"],
+      triggers=("play", "pause", "stop", "next", "skip", "previous", "resume", "music", "song", "track", "back",
+                "playing", "spotify", "unpause", "continue", "put on", "listen", "hear", "playlist", "album",
+                "tune", "media", "video", "youtube"))
+def media_control(action: str, app: str = "", ctx=None):
+    from .. import media
+
+    default_app = ((ctx.cfg.get("media") or {}).get("default_app") if ctx else None) or None
+    ok, message = media.control(action, app or None, default_app=default_app)
+    if not ok:
+        raise ToolFailed(message)
+    return message
 
 
 def _endpoint_volume():
@@ -496,7 +516,9 @@ def run_routine(name: str, ctx=None):
     results = run_steps(ctx, routine)
     intro = routine.get("say", "")
     if not routine.get("summarize", True):
-        return f"Routine {key} done." + (f" Say: {intro}" if intro else "")
+        failed = [r for r in results if r.endswith("not available") or ": failed (" in r]
+        note = f" Some steps didn't work: {'; '.join(failed)}." if failed else ""
+        return Spoken((intro or f"{key.capitalize()} is done.") + note)
     return (f"Routine '{key}' results (summarize them as a short spoken briefing"
             + (f", starting with: {intro}" if intro else "") + "):\n" + "\n".join(results))
 

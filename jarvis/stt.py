@@ -63,8 +63,12 @@ class Transcriber:
                 except Exception:
                     self.model = WhisperModel(model, device=dev, compute_type=ctype, download_root=root)
                 # a tiny warm-up catches missing CUDA DLLs now instead of on the first command
-                segments, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32), language=self.language)
-                list(segments)  # transcription is lazy; iterate to actually run it
+                # warm up on 3 s of quiet noise with the real settings, so the first command isn't slow
+                noise = (np.random.default_rng(0).standard_normal(48000) * 0.01).astype(np.float32)
+                for vad in (True, False):   # loads the VAD model, then exercises the decoder itself
+                    segments, _ = self.model.transcribe(noise, language=self.language, beam_size=1, vad_filter=vad,
+                                                        condition_on_previous_text=False, initial_prompt=self.hints)
+                    list(segments)  # transcription is lazy; iterate to actually run it
                 self.device = dev
                 log.info("Whisper %s on %s (%s)", model, dev, ctype)
                 return

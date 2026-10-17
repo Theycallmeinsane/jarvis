@@ -127,7 +127,7 @@ class AgentTests(unittest.TestCase):
     def test_dangerous_tool_needs_confirmation(self):
         call = ToolCall("1", "close_app", {"name": "definitely-not-running"})
         agent = self._agent([Turn(tool_calls=[call]), Turn(text="Okay, left it open.")], confirm=lambda q: False)
-        self.assertEqual(agent.handle("close it"), "Okay, left it open.")
+        self.assertEqual(agent.handle("close it"), "Okay, I've left it.")   # declined: said directly
         self.assertIn("declined", agent.provider.results[0].content)
 
     def test_trigger_words_block_unrequested_actions(self):

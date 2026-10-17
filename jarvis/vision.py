@@ -8,7 +8,7 @@ import os
 
 import requests
 
-from .config import Section
+from .config import Section, local_url
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def describe(cfg: Section, image: bytes, question: str) -> str:
             "stream": False, "think": False, "keep_alive": o.get("keep_alive", "30m"),
             "options": {"temperature": 0.2, "num_ctx": o.get("num_ctx", 8192)},
         }
-        r = requests.post(f"{o.get('base_url', 'http://localhost:11434').rstrip('/')}/api/chat", json=body, timeout=180)
+        r = requests.post(f"{local_url(o.get('base_url', 'http://127.0.0.1:11434')).rstrip('/')}/api/chat", json=body, timeout=180)
         r.raise_for_status()
         return r.json()["message"]["content"].strip()
 
