@@ -97,5 +97,19 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(data, {"assistant": {"address": "sir"}, "tts": {"voice": "jarvis"}})
 
 
+class PerformanceTests(unittest.TestCase):
+    def test_profiles_trade_speed_for_quality(self):
+        hw = hardware.Hardware("RTX 3050", 8, 16, 16)
+        fast, bal, qual = (hardware.performance_settings(p, hw) for p in ("fast", "balanced", "quality"))
+        self.assertLess(fast["recording"]["silence_ms"], bal["recording"]["silence_ms"])
+        self.assertLess(bal["recording"]["silence_ms"], qual["recording"]["silence_ms"])
+        self.assertEqual(fast["llm"]["providers"]["ollama"]["model"], "qwen3.5:2b")
+        self.assertEqual(bal["llm"]["providers"]["ollama"]["model"], "qwen3.5:4b")
+        self.assertEqual(fast["stt"]["model"], "base.en")
+        self.assertNotIn("tts", fast)                       # the voice isn't touched
+        cpu = hardware.performance_settings("quality", hardware.Hardware(None, 0, 16, 8))
+        self.assertEqual(cpu["stt"]["model"], "small.en")   # no GPU: never a large Whisper
+
+
 if __name__ == "__main__":
     unittest.main()

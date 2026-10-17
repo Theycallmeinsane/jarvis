@@ -128,7 +128,9 @@ class KokoroTTS:
         if device in ("auto", "cuda") and cuda_onnx_available():
             if hasattr(ort, "preload_dlls"):
                 ort.preload_dlls()    # load the CUDA/cuDNN DLLs shipped as pip packages
-            providers.insert(0, "CUDAExecutionProvider")
+            # HEURISTIC: the default exhaustive cuDNN search re-runs for every new sentence length,
+            # costing up to ~1 s per sentence; heuristic keeps every sentence at ~0.2 s on an RTX 3050
+            providers.insert(0, ("CUDAExecutionProvider", {"cudnn_conv_algo_search": "HEURISTIC"}))
         session = ort.InferenceSession(str(d / "kokoro-v1.0.onnx"), providers=providers)
         self.device = "cuda" if "CUDAExecutionProvider" in session.get_providers() else "cpu"
         if self.device == "cpu" and not allow_cpu:

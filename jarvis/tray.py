@@ -91,6 +91,10 @@ class TrayApp:
                 pystray.MenuItem(label, self._brain_setter(key), radio=True,
                                  checked=lambda _, k=key: self._brain() == k)
                 for label, key in self.BRAINS])),
+            pystray.MenuItem("Speed vs quality", pystray.Menu(*[
+                pystray.MenuItem(label, self._perf_setter(key), radio=True,
+                                 checked=lambda _, k=key: (self.cfg.get("performance") or "balanced") == k)
+                for label, key in (("Fast", "fast"), ("Balanced", "balanced"), ("Quality", "quality"))])),
             pystray.MenuItem("Voice", pystray.Menu(*[
                 pystray.MenuItem(f"{name} ({p['desc']})", self._voice_setter(name), radio=True,
                                  checked=lambda _, n=name: self._voice() == n)
@@ -146,6 +150,17 @@ class TrayApp:
                 self.icon.update_menu()
             threading.Thread(target=work, daemon=True).start()
         return set_brain
+
+    def _perf_setter(self, key: str):
+        def set_perf(*_):
+            from .config import save_local
+            from .hardware import performance_settings
+
+            save_local(performance_settings(key))
+            self.cfg["performance"] = key
+            self.icon.notify(f"Speed vs quality set to {key}. Quit and start Jarvis again to apply.", "Jarvis")
+            self.icon.update_menu()
+        return set_perf
 
     def _voice(self) -> str | None:
         return getattr(self.assistant.tts, "preset", None) if self.assistant else None
