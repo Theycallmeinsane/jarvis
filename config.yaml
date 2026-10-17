@@ -1,6 +1,8 @@
 # Jarvis configuration. Paths are relative to this folder unless absolute.
 # Secrets (API keys) go in .env, never here.
 
+performance: balanced          # fast | balanced | quality  (jarvis.bat --performance fast, or the tray menu)
+
 assistant:
   name: Jarvis
   user_name: null            # your name (set by the setup wizard in config.local.yaml)
@@ -36,7 +38,7 @@ audio:
 
 recording:
   vad_aggressiveness: 2       # 0-3 (webrtcvad), higher = stricter about what counts as speech
-  silence_ms: 800             # stop recording after this much silence
+  silence_ms: 700             # answer after this much silence (fast 550 / balanced 700 / quality 950)
   start_timeout_s: 6          # give up if you say nothing after the wake word
   max_seconds: 20
 
@@ -97,6 +99,10 @@ tts:                          # all voices are open source and run locally
 
 media:
   default_app: spotify        # "play some music" with nothing open starts this; null = don't
+
+ducking:                      # turn whatever is playing down while Jarvis listens and talks
+  enabled: true
+  level: 0.3                  # 30% of the app's own volume; restored afterwards (1.0 = don't duck)
 
 router:
   enabled: true               # fast path: common commands run instantly without the brain

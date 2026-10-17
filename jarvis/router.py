@@ -59,8 +59,11 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
             return [("media_control", {"action": "play", "app": app})]
         m = re.fullmatch(r"(?:play )?(?:the )?(?:next|skip)(?: (?:song|track|one))?(?: (?:this|it))?" + MEDIA_APP, t) \
             or re.fullmatch(r"skip(?: (?:this|the)(?: song| track)?)?" + MEDIA_APP, t)
+        m = m or re.fullmatch(r"(?:switch|change|go|move|skip)(?: on)?(?: to)? (?:the |a )?(?:next|another|different|new)"
+                              r"(?: song| track| music| one)?" + MEDIA_APP, t) \
+            or re.fullmatch(r"(?:switch|change|skip) (?:the |this )?(?:song|music|track)" + MEDIA_APP, t)
         if m:
-            return [("media_control", {"action": "next", "app": m.group("app") or ""})]
+            return [("media_control", {"action": "next", "app": m.groupdict().get("app") or ""})]
         m = re.fullmatch(r"(?:play )?(?:the )?(?:previous|last|prior)(?: (?:song|track|one))?" + MEDIA_APP, t) \
             or re.fullmatch(r"go back(?: a| one)?(?: song| track)", t)
         if m:
@@ -68,6 +71,37 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
         if re.fullmatch(r"what(?:'s| is)(?: this| the)?(?: song| music| track)?(?: (?:that's|that is))? playing"
                         r"(?: now| right now)?|what song is this|what(?:'s| is) this song|who sings this", t):
             return [("media_control", {"action": "status"})]
+        # "play glimpse of us by joji", "instead, put on bohemian rhapsody on spotify"
+        m = re.fullmatch(r"(?:instead |now |then )?(?:play|put on)(?: me)? (?P<song>.+?)(?: (?:on|in) spotify)?", t)
+        if m and has("play_song"):
+            song = m.group("song").strip()
+            generic = re.fullmatch(r"(?:the |my |some |this |a |that )?(?:music|song|track|playlist|spotify|it|"
+                                   r"something|anything|video|audio)(?: (?:on|in) spotify)?", song)
+            if not generic and len(song) > 2:
+                return [("play_song", {"song": song})]
+
+    # ---- one app's volume: "spotify volume to 30", "turn spotify down", "mute discord", "music volume up"
+    if has("app_volume"):
+        app_re = r"(?P<app>spotify|chrome|youtube|discord|vlc|steam|edge|firefox|teams|zoom|the music|music|the game)"
+        m = re.fullmatch(r"(?:set |change |put )?(?:the )?" + app_re + r"(?:'s|s)? volume(?: to| at)? (?P<n>\d{1,3})"
+                         r"(?: ?%| percent)?", t) \
+            or re.fullmatch(r"(?:set |turn |put )(?:the )?" + app_re + r"(?: volume)? (?:to|at) (?P<n>\d{1,3})"
+                            r"(?: ?%| percent)?", t)
+        if m:
+            return [("app_volume", {"app": m.group("app"), "action": "set", "percent": int(m.group("n"))})]
+        m = re.fullmatch(r"(?:turn )?(?:the )?" + app_re + r"(?:'s|s)?(?: volume)? (?P<d>up|down)(?: a bit| a little)?", t) \
+            or re.fullmatch(r"turn (?P<d>up|down) (?:the )?" + app_re + r"(?:'s|s)?(?: volume)?", t) \
+            or re.fullmatch(r"(?:make )?(?:the )?" + app_re + r" (?P<d>louder|quieter)", t)
+        if m:
+            d = {"louder": "up", "quieter": "down"}.get(m.group("d"), m.group("d"))
+            return [("app_volume", {"app": m.group("app"), "action": d})]
+        m = re.fullmatch(r"(?P<a>mute|unmute) (?:the )?" + app_re, t)
+        if m:
+            return [("app_volume", {"app": m.group("app"), "action": m.group("a")})]
+        m = re.fullmatch(r"what(?:'s| is) (?:the )?" + app_re + r"(?:'s|s)? volume(?: at)?", t) \
+            or re.fullmatch(r"how loud is (?:the )?" + app_re, t)
+        if m:
+            return [("app_volume", {"app": m.group("app"), "action": "get"})]
 
     # ---- volume
     if has("volume"):

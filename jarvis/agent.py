@@ -37,7 +37,7 @@ Today is {today}."""
 # when a turn only used these, their result is said directly instead of asking the brain to rephrase it
 # (one model call instead of two, and no chance to "improve" a failure into a success).
 SPEAKS_RESULT = {
-    "media_control", "volume", "open_app", "open_website", "web_search", "set_timer", "cancel_timer",
+    "media_control", "play_song", "volume", "app_volume", "open_app", "open_website", "web_search", "set_timer", "cancel_timer",
     "lock_computer", "take_screenshot", "take_note", "copy_to_clipboard", "type_text", "window_action",
     "close_window", "desktop_action", "press_keys", "open_settings", "open_folder", "theme", "switch_voice",
     "close_app", "power", "open_path",
@@ -48,13 +48,14 @@ class Agent:
     def __init__(self, cfg: Section, notify: Callable[[str], None] | None = None,
                  confirm: Callable[[str], bool] | None = None, provider: str | None = None,
                  speak: Callable[[str], None] | None = None,
-                 switch_voice: Callable[[str], str] | None = None):
+                 switch_voice: Callable[[str], str] | None = None,
+                 unduck: Callable[[], None] | None = None):
         self.cfg = cfg
         self.confirm = confirm or (lambda q: True)
         self.memory = Memory(cfg) if (cfg.get("memory") or {}).get("enabled", True) else None
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
-            "memory": self.memory, "speak": speak, "switch_voice": switch_voice})
+            "memory": self.memory, "speak": speak, "switch_voice": switch_voice, "unduck": unduck})
         self._pending_switch: str | None = None
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None
@@ -79,17 +80,22 @@ class Agent:
             log.warning(problem)
         if hasattr(p, "warm_up"):
             p.warm_up()
-        self._fresh_conversation(p)
+        self._fresh_conversation(p, prime_now=True)
         log.info("Brain: %s", p.label)
         return p
 
-    def _fresh_conversation(self, p: LLMProvider):
+    def _fresh_conversation(self, p: LLMProvider, prime_now: bool = False):
         """New conversation: current date + remembered facts, and the last few exchanges replayed.
         (The system prompt only changes here, never mid-conversation, so histories stay append-only.)"""
         p.reset()
-        p.system_prompt = self._system_prompt()
+        old_prompt, p.system_prompt = p.system_prompt, self._system_prompt()
         if self.memory:
             p.messages = self.memory.seed_messages()
+        if hasattr(p, "prime") and (prime_now or p.system_prompt != old_prompt):
+            if prime_now:
+                p.prime()          # at start-up: before "Online and ready"
+            else:                  # mid-session: don't hold up the request that triggered it
+                threading.Thread(target=p.prime, daemon=True).start()
 
     def switch(self, name: str) -> str:
         with self._lock:

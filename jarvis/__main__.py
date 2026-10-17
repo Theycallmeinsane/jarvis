@@ -18,6 +18,8 @@ def main(argv=None):
                     help="voice: friday | amy | jarvis | friday-hd | heart-hd | bella-hd | jarvis-hd | windows")
     ap.add_argument("--setup", action="store_true", help="first-run wizard: voice, name, mic, brain")
     ap.add_argument("--yes", action="store_true", help="with --setup: accept every recommendation, no questions")
+    ap.add_argument("--performance", choices=["fast", "balanced", "quality"],
+                    help="speed vs quality: picks Whisper/brain sizes and the pause before answering")
     ap.add_argument("--config", help="path to a config.yaml")
     ap.add_argument("--list-devices", action="store_true", help="show microphones and speakers")
     ap.add_argument("--check", action="store_true", help="test every component and exit")
@@ -65,6 +67,18 @@ def main(argv=None):
         from .tools.google_tools import login
 
         print(login(cfg))
+        return
+    if args.performance:
+        from .config import save_local
+        from .hardware import performance_settings
+
+        s = performance_settings(args.performance)
+        path = save_local(s)
+        print(f"Saved '{args.performance}' to {path.name}: Whisper {s['stt']['model']}, "
+              f"brain {s['llm']['providers']['ollama']['model']}, answers after {s['recording']['silence_ms']} ms "
+              "of silence. Restart Jarvis to apply.")
+        model = s["llm"]["providers"]["ollama"]["model"]
+        print(f"(If you don't have it yet: ollama pull {model})")
         return
     if args.setup:
         from .setup_wizard import run_wizard

@@ -269,7 +269,37 @@ def _endpoint_volume():
     return cast(iface, POINTER(IAudioEndpointVolume))
 
 
-@tool("Set, raise, lower, mute or unmute the system volume.",
+@tool("Play a specific song (or 'song by artist') on Spotify. For just play/pause/next use media_control.",
+      {"song": {"type": "string", "description": "e.g. 'Glimpse of Us by Joji'"}},
+      triggers=("play", "put on", "listen", "song", "music", "spotify", "track", "hear"))
+def play_song(song: str):
+    from .. import media
+
+    ok, message = media.play_song(song)
+    if not ok:
+        raise ToolFailed(message)
+    return Spoken(message)
+
+
+@tool("Volume of ONE app in the Windows volume mixer (Spotify, Chrome, Discord, VLC, a game...): get, set, "
+      "up, down, mute, unmute. Use app='music' for whatever is playing. Reads the real level back.",
+      {"app": {"type": "string", "description": "App name, or 'music' for the app that's playing"},
+       "action": {"type": "string", "enum": ["get", "set", "up", "down", "mute", "unmute"]},
+       "percent": {"type": "integer", "description": "0-100 for 'set'; step for up/down (default 15)"}},
+      required=["app", "action"], triggers=("volume", "louder", "quieter", "mute", "loud", "quiet", "sound", "turn"))
+def app_volume(app: str, action: str, percent: int | None = None, ctx=None):
+    from .. import appvolume
+
+    unduck = ctx.context.get("unduck") if ctx else None
+    if unduck:
+        unduck()          # read/set the real level, not the lowered one while Jarvis is talking
+    ok, message = appvolume.control(app, action, percent)
+    if not ok:
+        raise ToolFailed(message)
+    return Spoken(message)
+
+
+@tool("Set, raise, lower, mute or unmute the overall SYSTEM volume (all apps). For one app use app_volume.",
       {"action": {"type": "string", "enum": ["set", "up", "down", "mute", "unmute", "get"]},
        "percent": {"type": "integer", "description": "0-100 for 'set'; step size for up/down (default 10)"}},
       required=["action"])

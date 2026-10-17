@@ -38,7 +38,7 @@ def main() -> int:
     cfg = load_config()
     t0 = time.perf_counter()
     tts = PiperTTS(**dict(cfg.tts.piper))
-    audio, sr = tts.synthesize(clean_for_speech("Hey Jarvis, open notepad please."))
+    audio, sr = tts.synthesize(clean_for_speech("Hey Jarvis, open Spotify."))
     check(len(audio) / sr > 1.0, f"Piper spoke {len(audio) / sr:.1f}s of audio in {time.perf_counter() - t0:.1f}s")
 
     a16 = resample_poly(audio, 16000, sr).astype(np.float32)
@@ -52,10 +52,10 @@ def main() -> int:
 
     # base.en on CPU: tiny.en is too rough ("open no-tad"); hints are the same ones Jarvis uses
     stt = Transcriber("base.en", "cpu", "int8", "en", str(ROOT / "models" / "whisper"),
-                      hints=(cfg.stt.get("hints") or "") + ", Notepad")
+                      hints=cfg.stt.get("hints"))
     text = stt.transcribe(a16)
     command = WAKE_PREFIX.sub("", text).strip()
-    check("notepad" in text.lower(), f"Whisper heard {text!r}; command after wake word: {command!r}")
+    check("spotify" in text.lower(), f"Whisper heard {text!r}; command after wake word: {command!r}")
 
     box = ToolBox(cfg)
     open_app = box.get("open_app")

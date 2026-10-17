@@ -31,6 +31,24 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(self.r("previous track"), [("media_control", {"action": "previous", "app": ""})])
         self.assertEqual(self.r("What's playing?"), [("media_control", {"action": "status"})])
         self.assertIsNone(self.r("stop"))                      # bare "stop" = cancel, not pause
+        # from the owner's real session
+        self.assertEqual(self.r("Switch to the next music on Spotify please"),
+                         [("media_control", {"action": "next", "app": "spotify"})])
+        self.assertEqual(self.r("change the song"), [("media_control", {"action": "next", "app": ""})])
+        self.assertEqual(self.r("Instead, play A Glimpse of Us by Joji, please."),
+                         [("play_song", {"song": "a glimpse of us by joji"})])
+        self.assertEqual(self.r("play some music"), [("media_control", {"action": "play", "app": ""})])
+
+    def test_app_volume(self):
+        self.assertEqual(self.r("Spotify volume to 30"), [("app_volume", {"app": "spotify", "action": "set", "percent": 30})])
+        self.assertEqual(self.r("set spotify's volume to 40%"),
+                         [("app_volume", {"app": "spotify", "action": "set", "percent": 40})])
+        self.assertEqual(self.r("turn spotify down"), [("app_volume", {"app": "spotify", "action": "down"})])
+        self.assertEqual(self.r("turn up the music"), [("app_volume", {"app": "music", "action": "up"})])
+        self.assertEqual(self.r("make spotify quieter"), [("app_volume", {"app": "spotify", "action": "down"})])
+        self.assertEqual(self.r("mute discord"), [("app_volume", {"app": "discord", "action": "mute"})])
+        self.assertEqual(self.r("what's spotify's volume"), [("app_volume", {"app": "spotify", "action": "get"})])
+        self.assertEqual(self.r("volume up"), [("volume", {"action": "up"})])     # plain = master volume
 
     def test_volume_time_timer_lock(self):
         self.assertEqual(self.r("set the volume to 30%"), [("volume", {"action": "set", "percent": 30})])
@@ -95,8 +113,9 @@ class HonestReplyTests(unittest.TestCase):
     def test_failed_media_command_is_reported_not_claimed(self):
         p = ScriptedProvider([Turn(tool_calls=[ToolCall("1", "media_control", {"action": "play", "app": "spotify"})]),
                               Turn(text="I've started the music!")])     # the lie it must never get to say
-        with mock.patch.object(media, "control", return_value=(False, "Spotify didn't accept play.")):
-            reply = self._agent(p).handle("play something by daft punk on spotify")
+        with mock.patch.object(media, "control", return_value=(False, "Spotify didn't accept play.")), \
+                mock.patch.object(media, "play_song", side_effect=AssertionError("must not run for real")):
+            reply = self._agent(p).handle("could you get the music going on spotify again")
         self.assertEqual(reply, "Spotify didn't accept play.")
         self.assertEqual(p.calls, 1)                                       # no second model call
 

@@ -165,6 +165,63 @@ def control(action: str, app: str | None = None, default_app: str | None = None)
     return False, f"{s.app_name} didn't accept {action}."
 
 
+def _similar(a: str, b: str) -> bool:
+    import difflib
+    import re
+
+    norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower())  # noqa: E731
+    a, b = norm(a), norm(b)
+    return bool(a and b) and (a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() > 0.7)
+
+
+def find_spotify_track(query: str) -> tuple[str, str] | None:
+    """(track id, title) for a song request like 'glimpse of us by joji', via a web search + Spotify oEmbed."""
+    import re
+
+    import requests
+    from ddgs import DDGS
+
+    with DDGS() as d:
+        rows = d.text(f"{query} site:open.spotify.com/track", max_results=8)
+    for r in rows:
+        m = re.search(r"open\.spotify\.com/(?:intl-\w+/)?track/([A-Za-z0-9]{22})", r.get("href", ""))
+        if not m:
+            continue
+        try:
+            title = requests.get("https://open.spotify.com/oembed", timeout=8,
+                                 params={"url": f"https://open.spotify.com/track/{m.group(1)}"}).json().get("title", "")
+        except (requests.RequestException, ValueError):
+            title = r.get("title", "").split(" - ")[0]
+        song = re.split(r"\s+by\s+", query, flags=re.I)[0]
+        if title and _similar(song, title):
+            return m.group(1), title
+    return None
+
+
+def play_song(query: str) -> tuple[bool, str]:
+    """Play a named song on Spotify, then check what's actually playing and say so honestly."""
+    hit = find_spotify_track(query)
+    if not hit:
+        return False, f"I couldn't find {query} on Spotify."
+    track_id, title = hit
+    os.startfile(f"spotify:track:{track_id}")       # the desktop app opens the song's page
+    for _ in range(12):
+        time.sleep(0.5)
+        s = _pick(sessions(), "spotify")
+        if s and _similar(title, s.title) and s.status == "playing":
+            return True, f"Playing {s.what()} on Spotify."
+    s = _pick(sessions(), "spotify")
+    if s and s.status != "playing":
+        _run(_command(s._raw, "play"))
+        time.sleep(1.0)
+        s = _same(s.app)
+        if s and _similar(title, s.title) and s.status == "playing":
+            return True, f"Playing {s.what()} on Spotify."
+    now = f" Spotify is playing {s.what()}." if s and s.status == "playing" else ""
+    return False, (f"I've opened {title} in Spotify, but I can't start that exact song from here; "
+                   f"press play on it.{now}")
+
+
 def _media_keys(action: str) -> tuple[bool, str]:
     import ctypes
 
