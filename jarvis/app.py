@@ -90,6 +90,9 @@ class VoiceAssistant:
         from .routines import Scheduler
 
         self.scheduler = Scheduler(cfg, self._run_scheduled).start()
+        from .tools.github_tools import start_watcher
+
+        self.github_watch = start_watcher(cfg, self._announce)   # spoken alert when a watched build fails
 
     def _run_scheduled(self, name: str):
         """A routine's scheduled time came: run it through the brain and announce the briefing."""
@@ -406,6 +409,8 @@ class VoiceAssistant:
         self.stop_event.set()
         self.speaker.stop()
         self.scheduler.stop()
+        if self.github_watch:
+            self.github_watch.stop()
         if self.hotkey:
             self.hotkey.stop()
 

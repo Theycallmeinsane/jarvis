@@ -60,7 +60,7 @@ Other ways to run it:
 .\jarvis.bat --list-devices      # find your mic's index / name
 .\jarvis.bat --check             # test every component
 .\jarvis.bat --wake-test         # live wake-word score meter, to tune the threshold for your mic
-.\jarvis.bat --google-login      # connect Google Calendar + Gmail (see below)
+.\jarvis.bat --google-setup      # connect Google Calendar + Gmail, step by step (see below)
 ```
 
 First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (10 minutes).
@@ -178,19 +178,59 @@ Add `params={...}` (JSON-schema per argument) for inputs and `dangerous=True` to
 
 ## Google Calendar & Gmail (optional)
 
-The Google tools stay hidden until you connect an account. One-time setup, about 5 minutes:
+The Google tools stay hidden until you connect an account. Run the guided setup (about 5 minutes):
 
-1. Open [Google Cloud console](https://console.cloud.google.com/) → create a project (any name).
-2. **APIs & Services → Library**: enable **Google Calendar API** and **Gmail API**.
-3. **APIs & Services → OAuth consent screen**: External, add yourself under *Test users*.
-4. **Credentials → Create credentials → OAuth client ID → Desktop app**, then *Download JSON*.
-5. Save it as `secrets\google_credentials.json` in this folder (the `secrets/` folder is git-ignored).
-6. Run `.\jarvis.bat --google-login`. Your browser opens once to approve access; the token is saved to
-   `secrets\google_token.json`.
+```powershell
+.\jarvis.bat --google-setup
+```
+
+Google only lets the account owner create the sign-in client, so you do the clicks; the setup opens each
+Google Cloud page in order and says exactly what to press on it:
+
+1. create a project, 2. turn on the Calendar and Gmail APIs, 3. set up the consent screen,
+4. add yourself as a test user (and optionally *Publish app*, so Google doesn't sign Jarvis out every 7 days),
+5. create a **Desktop app** client and click *Download JSON*.
+
+It then picks the file up from Downloads, moves it to `secrets\google_credentials.json` (git-ignored) and opens
+the Google sign-in once; the token is saved to `secrets\google_token.json`. Already have the JSON?
+`.\jarvis.bat --google-setup C:\path\to\client_secret.json`. To sign in again later: `.\jarvis.bat --google-login`.
 
 Permissions requested: calendar events (read/add), Gmail read, and Gmail compose (drafts + send).
 Jarvis never sends an email without reading the recipient, subject and body back to you and hearing a yes.
 Delete `secrets\google_token.json` to disconnect.
+
+## GitHub (optional)
+
+Jarvis uses the [GitHub CLI](https://cli.github.com)'s login, so it never stores a token itself:
+`winget install GitHub.cli` (setup.ps1 offers it), then `gh auth login` once. The tools appear when `gh` is
+installed. Set your repos in `config.local.yaml`:
+
+```yaml
+github:
+  default_repo: you/jarvis        # what "the build" means when you don't name a repo
+  watch: [you/jarvis]             # Jarvis says so out loud when one of these builds fails
+```
+
+* *"Any GitHub notifications?"*, *"did my last build pass?"*, *"what's open on jarvis?"*, *"recent commits"*
+* *"Why did the build fail?"*: reads the failed job's log and explains it in a sentence or two.
+* *"Create an issue: wake word misses me in the kitchen"*, *"comment on 12…"*, *"re-run the failed build"*:
+  these ask *"Shall I…?"* first. Merging, deleting, force-pushing and changing settings aren't possible by voice.
+
+## Files
+
+Jarvis can work with files on any drive by voice; spoken names don't need to be exact
+(*"the resume pdf in downloads"*, *"the D drive"*):
+
+* *"What's in my Downloads?"*, *"biggest files on D"*, *"what's using space in Documents?"*, *"find duplicates in Pictures"*
+* *"Summarize the report pdf in documents"*, *"read notes.txt"* (text, PDF, Word and code files)
+* *"Make a folder called invoices in documents"*, *"save a note file called shopping list"*, *"copy … to …"*,
+  *"zip the photos folder"*, *"unzip …"*
+* *"Rename …"*, *"move … to …"*, *"tidy up my downloads"* (sorts loose files into Documents, Images, Videos…) and
+  *"delete …"* ask first. Deleting only ever moves things to the **Recycle Bin**.
+
+Jarvis only changes files inside `files.allowed_roots` (default: your user folder and non-system drives).
+Windows, Program Files, ProgramData, AppData and Jarvis's own folder are always read-only, and nothing is
+overwritten: a copy gets a new name like `report (2).pdf`.
 
 ## MCP servers (plug in more tools)
 

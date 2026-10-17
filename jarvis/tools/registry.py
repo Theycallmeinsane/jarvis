@@ -67,7 +67,7 @@ class ToolBox:
     """The set of tools active for this run, plus shared context they can use."""
 
     def __init__(self, cfg, context: dict[str, Any] | None = None):
-        from . import builtin, google_tools, memory_tools, windows  # noqa: F401  registers the built-in tools
+        from . import builtin, files_ext, github_tools, google_tools, memory_tools, windows  # noqa: F401  registers the built-in tools
 
         self.cfg = cfg
         self.context = context or {}

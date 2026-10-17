@@ -116,6 +116,18 @@ google:                       # Calendar + Gmail; tools appear once the credenti
   credentials_file: secrets/google_credentials.json   # OAuth client (Desktop app) from Google Cloud
   token_file: secrets/google_token.json               # created by: jarvis.bat --google-login
 
+github:                       # GitHub by voice; uses the GitHub CLI's login (winget install GitHub.cli, gh auth login)
+  enabled: true               # tools appear only when `gh` is installed
+  default_repo: null          # owner/name used when you don't name one ("did the build pass?")
+  watch: []                   # repos whose failed builds Jarvis announces, e.g. [you/jarvis]
+  alerts: true
+  poll_minutes: 3
+
+files:                        # file access by voice (browse, read, create, rename, move, tidy, delete to Recycle Bin)
+  allowed_roots: auto         # where Jarvis may change files. auto = your user folder + non-system drives,
+                              # or a list, e.g. [~/Documents, ~/Downloads, "D:/"]. Reading works anywhere.
+  protected: []               # extra folders to keep read-only (Windows, Program Files, AppData... always are)
+
 vision:                       # "look at my screen" / "what does this error say?"
   enabled: true
   provider: ollama            # ollama (qwen3.5 can see, stays local) | claude
