@@ -38,7 +38,7 @@ Try, in order:
 | say | expect |
 |---|---|
 | "Hey Jarvis" … (pause) … "what time is it?" | chime, then the time |
-| (straight after, no wake word) "and the weather in Lahore?" | weather |
+| (straight after, no wake word) "and the weather in London?" | weather |
 | "Hey Jarvis, set a timer for one minute to stretch" (one breath) | timer set; a minute later it speaks the reminder |
 | "Hey Jarvis, tell me a long story about a robot" then "Hey Jarvis" while it talks | it stops and listens |
 | "Hey Jarvis, remember that my favourite tea is green tea" | "noted"; quit and restart Jarvis, then ask "what's my favourite tea?" |
@@ -46,7 +46,7 @@ Try, in order:
 | "Hey Jarvis, close Notepad" | asks "Shall I…?"; say "yes" |
 | press **Ctrl+Alt+J** and ask anything | same as the wake word |
 | "Hey Jarvis, what's on my screen?" | a short description |
-| "Thanks Jarvis" | "At your service, sir." and back to waiting |
+| "Thanks Jarvis" | "At your service." and back to waiting |
 
 ## 4. If something's off
 

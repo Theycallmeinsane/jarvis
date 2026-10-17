@@ -95,13 +95,6 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
                         s.get("language", "en"), s.get("download_root", "models/whisper"))
         return f"{s.get('model')} on {t.device}"
 
-    def voice():
-        from .tts import create_tts
-
-        engine = create_tts(cfg.tts, tts)
-        audio, sr = engine.synthesize("Systems check complete.")
-        return f"{engine.__class__.__name__}, {len(audio) / sr:.1f}s of audio"
-
     def brain():
         from .llm import create_provider
         from .tools import ToolBox
@@ -115,11 +108,35 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
         turn = p.step()
         return f"{p.label} replied: {turn.text.strip()[:40]!r}"
 
+    def runtime():
+        from .hardware import onnxruntime_status
+
+        ok, text = onnxruntime_status()
+        if not ok:
+            raise RuntimeError(text)
+        return text
+
+    def voice_check():
+        from .tts import create_tts, resolve_preset
+
+        engine = create_tts(cfg.tts, tts)
+        audio, sr = engine.synthesize("Systems check complete.")
+        wanted = tts or cfg.tts.get("voice") or "friday"
+        wanted = resolve_preset(wanted) or wanted
+        if engine.preset == "windows" and wanted != "windows":
+            raise RuntimeError(f"only the Windows fallback voice works ({wanted} failed; see the log)")
+        note = "" if engine.preset == wanted else f" (fallback for {wanted})"
+        return f"{engine.preset}{note}, {len(audio) / sr:.1f}s of audio"
+
+    from .hardware import describe, detect
+
     print("Jarvis systems check\n")
+    print(f"[ -- ] {'hardware':<12} {describe(detect())}")
+    check("runtime", runtime)
     check("microphone", mic)
     check("wake word", wake)
     check("speech->text", stt)
-    check("voice", voice)
+    check("voice", voice_check)
     check("brain", brain)
 
     # optional extras: informational, never counted as failures

@@ -102,17 +102,42 @@ class PiperTTS:
         return audio.astype(np.float32) / 32768.0, self.sample_rate
 
 
+def cuda_onnx_available() -> bool:
+    try:
+        import onnxruntime as ort
+
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class KokoroTTS:
-    def __init__(self, voice: str = "bm_george", speed: float = 1.0, models_dir: str = "models/kokoro"):
+    """Kokoro-82M: the most natural open voices. Needs an NVIDIA GPU (onnxruntime-gpu) to keep up in
+    conversation; on a CPU it's slower than real time."""
+
+    def __init__(self, voice: str = "af_heart", speed: float = 1.0, models_dir: str = "models/kokoro",
+                 device: str = "auto", allow_cpu: bool = False):
+        import onnxruntime as ort
         from kokoro_onnx import Kokoro
 
         d = resolve_path(models_dir)
         _download(f"{KOKORO_BASE}/kokoro-v1.0.onnx", d / "kokoro-v1.0.onnx")
         _download(f"{KOKORO_BASE}/voices-v1.0.bin", d / "voices-v1.0.bin")
-        self.kokoro = Kokoro(str(d / "kokoro-v1.0.onnx"), str(d / "voices-v1.0.bin"))
+        ort.set_default_logger_severity(3)   # hide harmless CUDA graph-optimisation warnings
+        providers = ["CPUExecutionProvider"]
+        if device in ("auto", "cuda") and cuda_onnx_available():
+            if hasattr(ort, "preload_dlls"):
+                ort.preload_dlls()    # load the CUDA/cuDNN DLLs shipped as pip packages
+            providers.insert(0, "CUDAExecutionProvider")
+        session = ort.InferenceSession(str(d / "kokoro-v1.0.onnx"), providers=providers)
+        self.device = "cuda" if "CUDAExecutionProvider" in session.get_providers() else "cpu"
+        if self.device == "cpu" and not allow_cpu:
+            raise RuntimeError("Kokoro needs an NVIDIA GPU to speak in real time (set allow_cpu: true to force)")
+        self.kokoro = Kokoro.from_session(session, str(d / "voices-v1.0.bin"))
         self.voice = voice
         self.speed = speed
         self.lang = "en-gb" if voice.startswith("b") else "en-us"
+        log.info("Kokoro on %s", self.device)
 
     def synthesize(self, text: str) -> tuple[np.ndarray, int]:
         samples, sr = self.kokoro.create(text, voice=self.voice, speed=self.speed, lang=self.lang)
@@ -149,16 +174,71 @@ class SapiTTS:
         return data.astype(np.float32) / 32768.0, sr
 
 
-def create_tts(cfg: Section, provider: str | None = None):
-    """Build the configured engine, falling back to SAPI so Jarvis can always talk."""
-    provider = provider or cfg.provider
-    order = [provider] + (["sapi"] if provider != "sapi" else [])
-    for name in order:
-        opts = dict(cfg.get(name) or {})
+# Ready-made voices. All open source and fully local. "-hd" voices use Kokoro and need an NVIDIA GPU;
+# on other PCs they fall back to the Piper voice named in "fallback".
+VOICE_PRESETS: dict[str, dict] = {
+    "friday":    {"engine": "piper", "voice": "en_GB-jenny_dioco-medium", "desc": "female, British"},
+    "amy":       {"engine": "piper", "voice": "en_US-amy-medium", "desc": "female, American"},
+    "jarvis":    {"engine": "piper", "voice": "en_GB-alan-medium", "desc": "male, British"},
+    "friday-hd": {"engine": "kokoro", "voice": "bf_emma", "fallback": "friday", "desc": "female, British, HD"},
+    "heart-hd":  {"engine": "kokoro", "voice": "af_heart", "fallback": "amy", "desc": "female, American, HD"},
+    "bella-hd":  {"engine": "kokoro", "voice": "af_bella", "fallback": "amy", "desc": "female, American, HD"},
+    "jarvis-hd": {"engine": "kokoro", "voice": "bm_george", "fallback": "jarvis", "desc": "male, British, HD"},
+    "windows":   {"engine": "sapi", "desc": "built-in Windows voice"},
+}
+VOICE_ALIASES = {"female": "friday", "woman": "friday", "girl": "friday", "male": "jarvis", "man": "jarvis",
+                 "british": "friday", "american": "amy", "hd": "friday-hd", "default": "friday"}
+
+
+def resolve_preset(name: str) -> str | None:
+    key = (name or "").lower().strip().replace(" voice", "").replace(" ", "-")
+    key = VOICE_ALIASES.get(key, key)
+    return key if key in VOICE_PRESETS else None
+
+
+def _build(engine: str, cfg: Section, voice: str | None = None):
+    opts = dict(cfg.get(engine) or {})
+    if engine == "piper":
+        if voice:
+            opts["voice"] = voice
+        return PiperTTS(**{k: v for k, v in opts.items() if k in ("voice", "length_scale", "models_dir")})
+    if engine == "kokoro":
+        if voice:
+            opts["voice"] = voice
+        return KokoroTTS(**{k: v for k, v in opts.items()
+                            if k in ("voice", "speed", "models_dir", "device", "allow_cpu")})
+    return SapiTTS(**{k: v for k, v in opts.items() if k in ("rate", "voice")})
+
+
+def create_tts(cfg: Section, choice: str | None = None):
+    """Build the chosen voice (a preset like 'friday' / 'jarvis-hd', or an engine name), falling back
+    HD -> Piper -> the Windows voice, so Jarvis always talks and the log says why."""
+    choice = choice or cfg.get("voice") or cfg.get("provider") or "friday"
+    attempts: list[tuple[str, str | None, str]] = []      # (engine, voice, label)
+    preset = resolve_preset(choice)
+    if preset:
+        p = VOICE_PRESETS[preset]
+        attempts.append((p["engine"], p.get("voice"), preset))
+        if p.get("fallback"):
+            fb = VOICE_PRESETS[p["fallback"]]
+            attempts.append((fb["engine"], fb["voice"], p["fallback"]))
+    elif choice in ("piper", "kokoro", "sapi"):
+        attempts.append((choice, None, choice))
+    else:
+        log.warning("Unknown voice %r; using friday", choice)
+    if not any(a[0] == "piper" for a in attempts):
+        attempts.append(("piper", VOICE_PRESETS["friday"]["voice"], "friday"))
+    attempts.append(("sapi", None, "windows"))
+
+    for engine, voice, label in attempts:
         try:
-            engine = {"piper": PiperTTS, "kokoro": KokoroTTS, "sapi": SapiTTS}[name](**opts)
-            log.info("TTS: %s", name)
-            return engine
-        except Exception as e:
-            log.warning("TTS %s unavailable (%s)", name, e)
-    raise RuntimeError("No TTS engine could be loaded")
+            tts = _build(engine, cfg, voice)
+            tts.preset = label
+            if label != attempts[0][2]:
+                log.warning("Voice: using %s instead of %s", label, attempts[0][2])
+            log.info("Voice: %s (%s)", label, VOICE_PRESETS.get(label, {}).get("desc", engine))
+            return tts
+        except Exception as e:  # noqa: BLE001
+            hint = " (run setup.ps1 to repair the install)" if "onnxruntime" in str(e) else ""
+            log.warning("Voice %s unavailable: %s%s", label, e, hint)
+    raise RuntimeError("No voice could be loaded, not even the built-in Windows one")

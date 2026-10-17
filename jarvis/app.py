@@ -13,7 +13,8 @@ from .audio import CHIME_DONE, CHIME_ERROR, CHIME_LISTEN, CHIME_SR, Microphone, 
 from .config import Section
 from .recorder import CommandRecorder
 from .stt import Transcriber
-from .tts import SentenceSplitter, clean_for_speech, create_tts
+from .config import save_local
+from .tts import VOICE_PRESETS, SentenceSplitter, clean_for_speech, create_tts, resolve_preset
 from .wakeword import WakeWordDetector
 
 log = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ class VoiceAssistant:
         self.recorder = CommandRecorder(self.mic, rec.get("vad_aggressiveness", 2), rec.get("silence_ms", 800),
                                         rec.get("start_timeout_s", 6), rec.get("max_seconds", 20))
         self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm,
-                           speak=self._speak_from_tool)
+                           speak=self._speak_from_tool, switch_voice=self.switch_voice)
         from .routines import Scheduler
 
         self.scheduler = Scheduler(cfg, self._run_scheduled).start()
@@ -94,6 +95,19 @@ class VoiceAssistant:
         reply = self.agent.handle(f"Run my '{name}' routine now and brief me.")
         if reply:
             self._announce(reply)
+
+    def switch_voice(self, name: str, remember: bool = True) -> str:
+        """Load another voice preset (from the tool, the tray or code) and remember it for next time."""
+        preset = resolve_preset(name)
+        if not preset:
+            return f"I don't have a voice called {name}. Options: {', '.join(VOICE_PRESETS)}."
+        new = create_tts(self.cfg.tts, preset)
+        self.tts = new
+        if remember:
+            save_local({"tts": {"voice": new.preset}})
+        if new.preset != preset:
+            return f"The {preset} voice needs an NVIDIA GPU, so I'm using {new.preset} instead."
+        return f"Voice changed to {preset}, {VOICE_PRESETS[preset]['desc']}."
 
     def _speak_from_tool(self, text: str):
         """read_aloud: the text joins the reply that's being spoken (or is said at the next quiet moment)."""
@@ -296,7 +310,7 @@ class VoiceAssistant:
                 self.speak("Very well.")
                 break
             if GOODBYE.match(text):
-                self.speak("At your service, sir.")
+                self.speak(f"At your service{self._address()}.")
                 break
             if self.respond(text):
                 # interrupted with "Hey Jarvis": take the new command right away
@@ -316,7 +330,7 @@ class VoiceAssistant:
         print(f"\n{name} is online using {self.agent.provider.label}. Say \"Hey Jarvis\". (Ctrl+C to quit)\n")
         self._set_state("idle")
         # (not saying its own name here: on open speakers that could wake it)
-        barged = self.speak("Online and ready, sir.")
+        barged = self.speak(f"Online and ready{self._address()}.")
         try:
             if barged:
                 self._converse_safely()
@@ -351,6 +365,11 @@ class VoiceAssistant:
             print("\nShutting down.")
         finally:
             self.mic.stop()
+
+    def _address(self) -> str:
+        """', sir' / ', boss' / '' depending on assistant.address."""
+        address = (self.cfg.assistant.get("address") or "").strip()
+        return f", {address}" if address else ""
 
     def _hotkey_pressed(self) -> bool:
         if self.hotkey and self.hotkey.pressed.is_set():

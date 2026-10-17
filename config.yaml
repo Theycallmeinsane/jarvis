@@ -3,7 +3,8 @@
 
 assistant:
   name: Jarvis
-  user_name: Muhammad
+  user_name: null            # your name (set by the setup wizard in config.local.yaml)
+  address: null              # how Jarvis addresses you: sir, ma'am, boss, your name... or null
   follow_up_seconds: 6        # keep listening (no wake word needed) right after a reply
   idle_reset_minutes: 5       # start a fresh conversation after this much silence (memory carries over)
   max_tool_steps: 6           # max tool calls per request before giving up
@@ -44,7 +45,7 @@ stt:
   compute_type: auto          # auto | float16 | int8_float16 | int8
   language: en
   download_root: models/whisper
-  hints: "Jarvis, Lahore, Spotify, YouTube, VS Code"   # words/names it should expect; add your own
+  hints: "Jarvis, Spotify, YouTube, VS Code, Chrome, Notepad"   # names it should expect; add your own
 
 llm:
   provider: ollama            # ollama | lmstudio | openai_compat | claude   (local is the default)
@@ -73,16 +74,21 @@ llm:
       max_tokens: 16000
       api_key_env: ANTHROPIC_API_KEY
 
-tts:
-  provider: piper             # piper | kokoro | sapi  (all run locally)
+tts:                          # all voices are open source and run locally
+  voice: friday               # friday (female, British) | amy (female, American) | jarvis (male, British)
+                              # HD, needs an NVIDIA GPU: friday-hd | heart-hd | bella-hd | jarvis-hd
+                              # windows (built-in voice) | piper / kokoro (use the engine settings below)
+                              # Switch any time: "Hey Jarvis, switch to the male voice", tray menu, --voice
   piper:
-    voice: en_GB-alan-medium  # any voice from https://huggingface.co/rhasspy/piper-voices
+    voice: en_GB-jenny_dioco-medium   # used with voice: piper; any https://huggingface.co/rhasspy/piper-voices
     length_scale: 0.95        # < 1 speaks faster
     models_dir: models/piper
   kokoro:
-    voice: bm_george          # British male; try am_michael, af_heart, bf_emma ...
+    voice: af_heart           # used with voice: kokoro; af_bella, bf_emma, bm_george, am_michael ...
     speed: 1.05
     models_dir: models/kokoro
+    device: auto              # auto | cuda | cpu
+    allow_cpu: false          # Kokoro on a CPU is slower than real time; HD presets fall back to Piper
   sapi:                       # built-in Windows voices, zero download
     rate: 185
     voice: null               # part of a voice name, e.g. "David" or "Hazel"
@@ -110,16 +116,16 @@ vision:                       # "look at my screen" / "what does this error say?
 routines:                     # your own multi-step workflows: "run good morning", "work mode", "movie mode"
                               # steps = any tool + its arguments, or "wait: <seconds>"
   good morning:
-    say: Good morning, sir.
+    say: Good morning.
     steps:
       - get_datetime
-      - get_weather: {}             # {} = your location from IP; or {location: Lahore}
+      - get_weather: {}             # {} = your location from IP; or {location: Your City}
       - calendar_upcoming: {days: 1}    # skipped until Google is connected
       - web_lookup: {query: top headlines today, news: true}
     summarize: true                 # the brain turns the results into a short briefing
     # schedule: {time: "08:00", days: [mon, tue, wed, thu, fri]}   # uncomment to run it every weekday
   work mode:
-    say: Work mode is on, sir.
+    say: Work mode is on.
     steps:
       - desktop_action: {action: minimize_all}
       - open_app: {name: Visual Studio Code}
@@ -131,14 +137,14 @@ routines:                     # your own multi-step workflows: "run good morning
       - volume: {action: set, percent: 30}
     summarize: false
   focus mode:
-    say: Focus mode for 25 minutes, sir. I'll tell you when to take a break.
+    say: Focus mode for 25 minutes. I'll tell you when to take a break.
     steps:
       - desktop_action: {action: minimize_all}
       - volume: {action: set, percent: 15}
       - set_timer: {seconds: 1500, message: Focus session done. Time for a five minute break.}
     summarize: false
   movie mode:
-    say: Enjoy the film, sir.
+    say: Enjoy the film.
     steps:
       - theme: {mode: dark}
       - desktop_action: {action: minimize_all}
@@ -153,7 +159,7 @@ routines:                     # your own multi-step workflows: "run good morning
 mcp_servers: {}
 #  files:
 #    command: npx
-#    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/Muhammad Hadi/Documents"]
+#    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/YOU/Documents"]
 #    confirm: auto          # auto: ask before tools that aren't marked read-only | always | never
 #    tools: [read_text_file, list_directory, search_files]   # optional allow-list
 #  my-http-server:

@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 
 from .config import ROOT, Section, resolve_path
+from .tts import VOICE_PRESETS
 
 log = logging.getLogger(__name__)
 
@@ -90,6 +91,10 @@ class TrayApp:
                 pystray.MenuItem(label, self._brain_setter(key), radio=True,
                                  checked=lambda _, k=key: self._brain() == k)
                 for label, key in self.BRAINS])),
+            pystray.MenuItem("Voice", pystray.Menu(*[
+                pystray.MenuItem(f"{name} ({p['desc']})", self._voice_setter(name), radio=True,
+                                 checked=lambda _, n=name: self._voice() == n)
+                for name, p in VOICE_PRESETS.items()])),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Start with Windows", self._toggle_autostart, checked=lambda _: autostart_enabled()),
             pystray.MenuItem("Open settings", lambda: self._open(ROOT / "config.yaml")),
@@ -141,6 +146,22 @@ class TrayApp:
                 self.icon.update_menu()
             threading.Thread(target=work, daemon=True).start()
         return set_brain
+
+    def _voice(self) -> str | None:
+        return getattr(self.assistant.tts, "preset", None) if self.assistant else None
+
+    def _voice_setter(self, name: str):
+        def set_voice(*_):
+            if not self.assistant:
+                return
+
+            def work():
+                msg = self.assistant.switch_voice(name)
+                self.icon.notify(msg, "Jarvis")
+                self.icon.update_menu()
+                self.assistant.announcements.put(msg)   # say it in the new voice
+            threading.Thread(target=work, daemon=True).start()
+        return set_voice
 
     def _toggle_autostart(self, *_):
         try:

@@ -1,4 +1,4 @@
-"""python -m jarvis [--tray] [--text] [--llm claude] [--tts kokoro] [--list-devices] [--check] [--google-login]"""
+"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-login]"""
 from __future__ import annotations
 
 import argparse
@@ -14,7 +14,10 @@ def main(argv=None):
     ap.add_argument("--text", action="store_true", help="type instead of talk (no mic needed)")
     ap.add_argument("--speak", action="store_true", help="in --text mode, also speak replies")
     ap.add_argument("--llm", help="brain to use: ollama | lmstudio | openai_compat | claude")
-    ap.add_argument("--tts", help="voice engine: piper | kokoro | sapi")
+    ap.add_argument("--voice", "--tts", dest="tts",
+                    help="voice: friday | amy | jarvis | friday-hd | heart-hd | bella-hd | jarvis-hd | windows")
+    ap.add_argument("--setup", action="store_true", help="first-run wizard: voice, name, mic, brain")
+    ap.add_argument("--yes", action="store_true", help="with --setup: accept every recommendation, no questions")
     ap.add_argument("--config", help="path to a config.yaml")
     ap.add_argument("--list-devices", action="store_true", help="show microphones and speakers")
     ap.add_argument("--check", action="store_true", help="test every component and exit")
@@ -56,6 +59,11 @@ def main(argv=None):
         from .tools.google_tools import login
 
         print(login(cfg))
+        return
+    if args.setup:
+        from .setup_wizard import run_wizard
+
+        run_wizard(answers={} if args.yes else None)
         return
     if args.wake_test:
         from .diagnostics import run_wake_test

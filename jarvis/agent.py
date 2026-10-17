@@ -16,7 +16,7 @@ from .tools import ToolBox
 log = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are {name}, a voice assistant running on {user}'s Windows PC, modelled on J.A.R.V.I.S. \
-from Iron Man: calm, precise, quietly witty, and loyal. Address the user as "sir" now and then, not every sentence.
+from Iron Man: calm, precise, quietly witty, and loyal. {address_rule}
 
 Everything you write is spoken aloud by a text-to-speech voice, so:
 - Reply in one to three short sentences unless the user asks for detail.
@@ -36,13 +36,14 @@ Today is {today}."""
 class Agent:
     def __init__(self, cfg: Section, notify: Callable[[str], None] | None = None,
                  confirm: Callable[[str], bool] | None = None, provider: str | None = None,
-                 speak: Callable[[str], None] | None = None):
+                 speak: Callable[[str], None] | None = None,
+                 switch_voice: Callable[[str], str] | None = None):
         self.cfg = cfg
         self.confirm = confirm or (lambda q: True)
         self.memory = Memory(cfg) if (cfg.get("memory") or {}).get("enabled", True) else None
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
-            "memory": self.memory, "speak": speak})
+            "memory": self.memory, "speak": speak, "switch_voice": switch_voice})
         self._pending_switch: str | None = None
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None
@@ -53,8 +54,11 @@ class Agent:
 
     def _system_prompt(self) -> str:
         a = self.cfg.assistant
-        prompt = SYSTEM_PROMPT.format(name=a.get("name", "Jarvis"), user=a.get("user_name", "the user"),
-                                      today=dt.date.today().strftime("%A %d %B %Y"))
+        address = (a.get("address") or "").strip()
+        rule = (f'Address the user as "{address}" now and then, not every sentence.' if address
+                else "Speak to the user naturally, without titles like sir or madam.")
+        prompt = SYSTEM_PROMPT.format(name=a.get("name") or "Jarvis", user=a.get("user_name") or "the user",
+                                      address_rule=rule, today=dt.date.today().strftime("%A %d %B %Y"))
         return prompt + (self.memory.facts_prompt() if self.memory else "")
 
     def _make(self, name: str) -> LLMProvider:
@@ -149,7 +153,7 @@ class Agent:
             p.add_tool_results([self._execute(call) for call in turn.tool_calls])
         # out of tool rounds: ask for the spoken answer with tools switched off
         turn = p.step(use_tools=False, on_text=on_text)
-        return turn.text.strip() or "Done, sir."
+        return turn.text.strip() or "Done."
 
     def _execute(self, call) -> ToolResult:
         tool = self.toolbox.get(call.name)

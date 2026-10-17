@@ -4,37 +4,59 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Say **"Hey Jarvis"**, ask for something, and Jarvis does it on your PC and answers out loud.
-Everything runs **locally by default**: wake word, speech-to-text, the language model and the voice.
-Switching to Claude (or any other model) is one setting, or just say *"switch to Claude"*.
+Your voice goes in through local speech-to-text (Whisper), a local brain (Ollama) decides what to do and runs
+Windows workflows, and the answer comes out through a local open-source voice (a female voice by default).
+Nothing leaves your PC unless you switch the brain to Claude.
 
 ```
  mic ─► openWakeWord ("hey jarvis") ─► webrtcvad (record until you pause) ─► faster-whisper (STT)
                                                                                  │
- speaker ◄── Piper / Kokoro / SAPI (TTS) ◄── agent loop ◄──► LLM (Ollama · LM Studio · Claude · OpenAI-compatible)
-                                                 │
-                                                 └──► tools: apps, web, volume, media, timers, notes, files, ...
+ speaker ◄── Piper / Kokoro (TTS, female or male) ◄── agent ◄──► brain (Ollama · LM Studio · Claude · any OpenAI-compatible)
+                                                        │
+                                                        └──► Windows workflows: apps, windows, settings, media, timers...
 ```
 
 ## Quick start
 
-Requirements: Windows 10/11, Python 3.11, [Ollama](https://ollama.com), a microphone.
+**You need:** Windows 10 or 11, a microphone, an internet connection for the first install (~2–4 GB of
+downloads). An NVIDIA GPU makes it faster but isn't required. Python and Ollama are installed for you if missing.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File setup.ps1 -Gpu   # drop -Gpu if you don't have an NVIDIA card
-.\jarvis.bat
-```
+1. **Get the code**: `git clone https://github.com/Theycallmeinsane/jarvis` (or *Code → Download ZIP* and unzip).
+2. **Install**: open PowerShell in the folder and run
 
-`setup.ps1` creates `.venv`, installs the packages, pulls the default Ollama model (`qwen3.5:4b`) and
-runs a systems check. The first run downloads the speech models (~0.6 GB) into `models/`.
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File setup.ps1
+   ```
+
+   It checks your hardware (GPU, VRAM, RAM), installs the right packages and a brain model that fits your PC,
+   asks a few optional questions (your name, how to address you, voice, microphone) and offers Desktop/Start
+   menu shortcuts. Add `-Yes` to accept every recommendation without questions.
+3. **Start it** (activate the app): double-click the **Jarvis** shortcut, or run `.\jarvis-tray.bat`.
+   An icon appears in the system tray (bottom-right, next to the clock). Wait for "Online and ready".
+4. **Talk**: say **"Hey Jarvis"** (or press **Ctrl+Alt+J**), wait for the chime, then e.g.
+   *"open Spotify"*, *"what's the weather?"*, *"switch to the male voice"*, *"run work mode"*.
+
+To start Jarvis automatically, right-click the tray icon → **Start with Windows**. To stop it: tray icon → **Quit**.
+Settings you choose live in `config.local.yaml` (personal, git-ignored); `config.yaml` holds the shared defaults.
+After pulling a new version, run `setup.ps1` again: it updates packages and keeps your settings.
+
+| PC | what setup picks |
+|---|---|
+| NVIDIA GPU, 12 GB+ VRAM | Whisper large-v3-turbo, brain qwen3.5:9b, HD voice |
+| NVIDIA GPU, 8 GB | Whisper small.en, brain qwen3.5:4b, HD voice (Kokoro on the GPU) |
+| NVIDIA GPU, 4–6 GB | Whisper base.en, brain qwen3.5:2b, Piper voice |
+| no NVIDIA GPU, 16 GB RAM | Whisper base.en on CPU, brain qwen3.5:2b, Piper voice |
+| no NVIDIA GPU, 8 GB RAM | Whisper base.en on CPU, brain qwen3.5:0.8b (consider `--llm claude`) |
 
 Other ways to run it:
 
 ```powershell
-.\jarvis-tray.bat                # run quietly in the system tray (right-click the icon for options)
+.\jarvis.bat                     # run in a console window (shows what it hears and says)
+.\jarvis.bat --setup             # run the setup questions again (voice, name, mic, brain)
 .\jarvis.bat --text              # type instead of talk (good for testing)
 .\jarvis.bat --text --speak      # type, but hear the replies
 .\jarvis.bat --llm claude        # use Claude for this run
-.\jarvis.bat --tts kokoro        # nicer (slower) voice
+.\jarvis.bat --voice jarvis      # pick a voice for this run (see "Voices")
 .\jarvis.bat --list-devices      # find your mic's index / name
 .\jarvis.bat --check             # test every component
 .\jarvis.bat --wake-test         # live wake-word score meter, to tune the threshold for your mic
@@ -80,7 +102,7 @@ Logs go to `data/jarvis.log`.
 | "Who is Ada Lovelace?" | `wikipedia_summary` |
 | "What's the latest Python version?", "any tech news today?" | `web_lookup` (DuckDuckGo results read back, no browser) |
 | "What does this error on my screen say?", "what's open?" | `look_at_screen` (local qwen3.5 vision, or Claude) |
-| "What's the weather in Lahore?" | `get_weather` (wttr.in) |
+| "What's the weather in Paris?" | `get_weather` (wttr.in) |
 | "Volume to 30", "mute", "louder" | `volume` |
 | "Pause the music", "next song" | `media_control` |
 | "Set a timer for 10 minutes", "remind me in an hour to stretch" | `set_timer` / `list_timers` / `cancel_timer` |
@@ -116,7 +138,7 @@ Define them in `config.yaml` (or `config.local.yaml`) and say *"run good morning
 ```yaml
 routines:
   good morning:
-    say: Good morning, sir.
+    say: Good morning.
     steps:
       - get_datetime
       - get_weather: {}
@@ -125,7 +147,7 @@ routines:
     summarize: true                                   # spoken as a short briefing
     schedule: {time: "08:00", days: [mon, tue, wed, thu, fri]}   # optional: runs by itself
   work mode:
-    say: Work mode is on, sir.
+    say: Work mode is on.
     steps:
       - open_app: {name: Visual Studio Code}
       - volume: {action: set, percent: 30}
@@ -179,7 +201,7 @@ GitHub, Spotify, home automation, databases…). Add it under `mcp_servers` in `
 mcp_servers:
   files:
     command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/Muhammad Hadi/Documents"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "C:/Users/YOU/Documents"]
     tools: [read_text_file, list_directory, search_files]   # optional: only expose these
   my-http-server:
     url: http://localhost:8000/mcp                         # streamable-HTTP servers work too
@@ -215,11 +237,29 @@ audio: {input_device: HyperX}
 
 ## Voices
 
-| `tts.provider` | quality | speed | notes |
+All open source, all local. Pick one in setup, with `tts.voice` in `config.local.yaml`, from the tray menu
+(**Voice**), with `--voice`, or just say *"switch to the female voice"* / *"switch to the male voice"*.
+
+| `tts.voice` | voice | engine | runs on |
 |---|---|---|---|
-| `piper` (default) | good | very fast | `en_GB-alan-medium` British male; any [Piper voice](https://huggingface.co/rhasspy/piper-voices) |
-| `kokoro` | best | slow on CPU | `bm_george` British male; ~330 MB download. On the i5-12600K it took 5.4 s to make 4 s of audio (int8 model: 4.5 s), so it only makes sense with `onnxruntime-gpu` |
-| `sapi` | basic | fast | built-in Windows voices, no download; automatic fallback |
+| `friday` (default) | female, British | Piper `en_GB-jenny_dioco-medium` | any PC |
+| `amy` | female, American | Piper `en_US-amy-medium` | any PC |
+| `jarvis` | male, British | Piper `en_GB-alan-medium` | any PC |
+| `heart-hd` | female, American, most natural | Kokoro `af_heart` | NVIDIA GPU |
+| `bella-hd` | female, American | Kokoro `af_bella` | NVIDIA GPU |
+| `friday-hd` | female, British | Kokoro `bf_emma` | NVIDIA GPU |
+| `jarvis-hd` | male, British | Kokoro `bm_george` | NVIDIA GPU |
+| `windows` | built-in Windows voice | SAPI | any PC, no download |
+
+HD voices fall back to the matching Piper voice on PCs without an NVIDIA GPU, and if Piper can't load either,
+Jarvis falls back to the Windows voice (the log says why) instead of going silent.
+
+Measured on an i5-12600K + RTX 3050: Piper medium voices speak 4–5× faster than real time on the CPU;
+Kokoro runs 4–7× real time on the GPU but only 0.6× on the CPU, which is why it's GPU-only. Sending each
+voice's speech through Whisper gave 8–13% word differences for every voice (mostly how numbers are written),
+so they're all equally clear; pick the one you like the sound of (`setup` can play a sample).
+
+Any other [Piper voice](https://huggingface.co/rhasspy/piper-voices) works too: `tts: {voice: piper, piper: {voice: en_US-kristin-medium}}`.
 
 ## Tuning
 
