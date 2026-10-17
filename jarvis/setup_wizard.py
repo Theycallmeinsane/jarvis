@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 from .config import ROOT, save_local
-from .hardware import describe, detect, onnxruntime_status, recommend
+from .hardware import describe, detect, onnxruntime_status, performance_settings, recommend
 from .tts import VOICE_PRESETS, cuda_onnx_available
 
 
@@ -82,7 +82,12 @@ def run_wizard(answers: dict | None = None) -> dict:
         print(f"  - {n}")
     print("\nPress Enter to accept the suggestion in [brackets].\n")
 
-    settings = rec.config()
+    perf = _ask("Speed or quality? fast (quickest replies) / balanced / quality (best understanding)",
+                "balanced", answers, "performance").lower()
+    if perf not in ("fast", "balanced", "quality"):
+        perf = "balanced"
+    settings = performance_settings(perf, hw)
+    settings["tts"] = {"voice": rec.voice}
     name = _ask("Your name (optional)", "", answers, "name")
     address = _ask("How should Jarvis address you? (e.g. sir, ma'am, boss, your name, or none)",
                    "none", answers, "address")

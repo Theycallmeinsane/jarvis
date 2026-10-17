@@ -23,7 +23,7 @@ CANCEL = re.compile(r"^(never ?mind|cancel|stop|forget it|nothing)\W*$", re.I)
 GOODBYE = re.compile(r"^(thanks?( you)?|that'?s all|goodbye|bye|go to sleep|dismissed)\W*( jarvis)?\W*$", re.I)
 YES = re.compile(r"\b(yes|yeah|yep|sure|go ahead|do it|confirm|affirmative|please do|okay|ok)\b", re.I)
 # the wake word fires before "...vis" ends, so the recording can start with the tail of it
-WAKE_PREFIX = re.compile(r"^\W*((hey|hi|ok|okay)\W+)?(jarvis|travis|vis)\b\W*", re.I)
+WAKE_PREFIX = re.compile(r"^\W*((hey|hi|hay|hate|a|ok|okay)\W+)?(jarvis|travis|vis)\b\W*", re.I)
 WAKE_TAILS = {"vis", "is", "this", "his", "hey", "jarvis"}
 # Whisper sometimes "hears" these in silence or noise
 HALLUCINATIONS = {"", "you", "thank you.", "thanks for watching!", "bye.", ".", "thank you for watching."}
@@ -85,8 +85,15 @@ class VoiceAssistant:
         rec = cfg.recording
         self.recorder = CommandRecorder(self.mic, rec.get("vad_aggressiveness", 2), rec.get("silence_ms", 800),
                                         rec.get("start_timeout_s", 6), rec.get("max_seconds", 20))
+        duck = cfg.get("ducking") or {}
+        self.ducker = None
+        if duck.get("enabled", True):
+            from .appvolume import Ducker
+
+            self.ducker = Ducker(float(duck.get("level", 0.3)))
         self.agent = Agent(cfg, notify=self._announce, confirm=self.confirm, provider=llm,
-                           speak=self._speak_from_tool, switch_voice=self.switch_voice)
+                           speak=self._speak_from_tool, switch_voice=self.switch_voice,
+                           unduck=self._unduck)
         from .routines import Scheduler
 
         self.scheduler = Scheduler(cfg, self._run_scheduled).start()
@@ -109,6 +116,20 @@ class VoiceAssistant:
         if new.preset != preset:
             return f"The {preset} voice needs an NVIDIA GPU, so I'm using {new.preset} instead."
         return f"Voice changed to {preset}, {VOICE_PRESETS[preset]['desc']}."
+
+    def _duck(self):
+        if self.ducker:
+            try:
+                self.ducker.duck()
+            except Exception:  # noqa: BLE001  (never let audio mixer trouble break a conversation)
+                log.debug("ducking failed", exc_info=True)
+
+    def _unduck(self):
+        if self.ducker:
+            try:
+                self.ducker.restore()
+            except Exception:  # noqa: BLE001
+                log.debug("restoring volume failed", exc_info=True)
 
     def _speak_from_tool(self, text: str):
         """read_aloud: the text joins the reply that's being spoken (or is said at the next quiet moment)."""
@@ -393,12 +414,15 @@ class VoiceAssistant:
         return False
 
     def _converse_safely(self):
+        self._duck()          # turn the music down while we talk (restored below)
         try:
             self.converse()
         except Exception:
             log.exception("conversation failed")
             self.chime(CHIME_ERROR)
             self._set_state("idle")
+        finally:
+            self._unduck()
         self.mic.clear()
         self.wake.reset()
 

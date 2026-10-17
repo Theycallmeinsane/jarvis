@@ -77,6 +77,38 @@ def recommend(hw: Hardware) -> Recommendation:
     return rec
 
 
+PERFORMANCE = ("fast", "balanced", "quality")
+SMALLER_BRAIN = {"qwen3.5:9b": "qwen3.5:4b", "qwen3.5:4b": "qwen3.5:2b", "qwen3.5:2b": "qwen3.5:0.8b"}
+
+
+def performance_settings(profile: str, hw: Hardware | None = None) -> dict:
+    """Concrete settings for a speed-vs-quality choice on this hardware (written to config.local.yaml).
+
+    fast:     smaller Whisper + brain, shorter pause before Jarvis answers (may cut slow talkers off)
+    balanced: what setup recommends for the hardware
+    quality:  bigger Whisper, a longer pause so you can think mid-sentence, more tool steps for the brain
+    """
+    hw = hw or detect()
+    rec = recommend(hw)
+    s = rec.config()
+    s["recording"] = {"silence_ms": 700}
+    s["llm"]["providers"]["ollama"]["max_tool_rounds"] = 1
+    if profile == "fast":
+        s["stt"]["model"] = "base.en"
+        s["llm"]["providers"]["ollama"]["model"] = SMALLER_BRAIN.get(rec.ollama_model, rec.ollama_model)
+        s["recording"]["silence_ms"] = 550
+    elif profile == "quality":
+        if hw.cuda and hw.vram_gb >= 7.5:
+            s["stt"]["model"] = "large-v3-turbo" if hw.vram_gb >= 11.5 else "distil-large-v3"
+        elif rec.whisper_model == "base.en":
+            s["stt"]["model"] = "small.en"
+        s["recording"]["silence_ms"] = 950
+        s["llm"]["providers"]["ollama"]["max_tool_rounds"] = 2
+    s["performance"] = profile
+    s.pop("tts", None)          # the voice is chosen separately
+    return s
+
+
 def describe(hw: Hardware) -> str:
     gpu = f"{hw.gpu_name} ({hw.vram_gb:.0f} GB VRAM)" if hw.cuda else "no NVIDIA GPU"
     return f"{gpu}, {hw.ram_gb:.0f} GB RAM, {hw.cpu_threads} CPU threads"

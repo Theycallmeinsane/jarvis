@@ -44,6 +44,19 @@ class OllamaProvider(LLMProvider):
         except requests.RequestException:
             pass
 
+    def prime(self):
+        """Have Ollama process the system prompt + tool list once now, so the first real question
+        reuses the cached prefix (~0.7 s) instead of paying the full ~3 s."""
+        try:
+            self._post({"model": self.model, "stream": False, "think": self.think, "keep_alive": self.keep_alive,
+                        "messages": [{"role": "system", "content": self.system_prompt},
+                                     {"role": "user", "content": "hi"}],
+                        "tools": self._tool_defs,
+                        "options": {"temperature": self.temperature, "num_ctx": self.num_ctx, "num_predict": 1}},
+                       stream=False)
+        except requests.RequestException:
+            pass
+
     def _post(self, body: dict, stream: bool):
         r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=180, stream=stream)
         if r.status_code == 400 and "think" in r.text:   # model without a thinking switch
