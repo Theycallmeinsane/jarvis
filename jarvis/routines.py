@@ -2,9 +2,9 @@
 
 routines:
   good morning:
-    say: Good morning, sir.                 # spoken first (optional)
+    say: Good morning.                      # spoken first (optional)
     steps:                                  # tool calls, run in order
-      - get_weather: {location: Lahore}
+      - get_weather: {location: Paris}
       - calendar_upcoming: {days: 1}
       - web_lookup: {query: top news today, news: true}
     summarize: true                         # have the brain turn the results into a short briefing

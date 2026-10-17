@@ -72,7 +72,7 @@ def system_status():
 
 
 @tool("Get current weather and today's forecast for a place.",
-      {"location": {"type": "string", "description": "City name, e.g. 'Lahore'. Empty for auto-detect."}},
+      {"location": {"type": "string", "description": "City name, e.g. 'Paris'. Empty for auto-detect."}},
       required=[], enabled=lambda cfg: cfg.tools.get("weather", True))
 def get_weather(location: str = ""):
     r = requests.get(f"https://wttr.in/{urllib.parse.quote(location)}", params={"format": "j1"}, timeout=10)
@@ -499,6 +499,25 @@ def run_routine(name: str, ctx=None):
         return f"Routine {key} done." + (f" Say: {intro}" if intro else "")
     return (f"Routine '{key}' results (summarize them as a short spoken briefing"
             + (f", starting with: {intro}" if intro else "") + "):\n" + "\n".join(results))
+
+
+# ---------------------------------------------------------------- voice
+
+def _voice_list(cfg=None) -> str:
+    from ..tts import VOICE_PRESETS
+
+    return ", ".join(f"{k} ({v['desc']})" for k, v in VOICE_PRESETS.items())
+
+
+@tool(lambda cfg: f"Change Jarvis's speaking voice. Voices: {_voice_list()}. "
+      "'female' and 'male' also work.",
+      {"voice": {"type": "string", "description": "Voice name, or 'female' / 'male' / 'american' / 'hd'"}},
+      triggers=("voice", "male", "female", "accent", "sound like", "speak like"))
+def switch_voice(voice: str, ctx=None):
+    switch = ctx.context.get("switch_voice") if ctx else None
+    if not switch:
+        return "Voice switching isn't available in this mode."
+    return switch(voice)
 
 
 # ---------------------------------------------------------------- brains

@@ -44,13 +44,15 @@ class Transcriber:
         from faster_whisper import WhisperModel
 
         self.language = language or None
-        self.hints = hints or None   # names Whisper should expect, e.g. "Jarvis, Lahore, Spotify"
+        self.hints = hints or None   # names Whisper should expect, e.g. "Jarvis, Spotify, Notepad"
         root = str(resolve_path(download_root))
         attempts = []
         if device in ("auto", "cuda") and _cuda_available():
             attempts.append(("cuda", "float16" if compute_type == "auto" else compute_type))
         if device in ("auto", "cpu") or not attempts:
-            attempts.append(("cpu", "int8" if compute_type == "auto" else compute_type))
+            # float16 only exists on GPUs; a CPU fallback always uses int8 unless told int8/float32 explicitly
+            cpu_type = compute_type if compute_type in ("int8", "float32", "int8_float32") else "int8"
+            attempts.append(("cpu", cpu_type))
 
         last_err = None
         for dev, ctype in attempts:

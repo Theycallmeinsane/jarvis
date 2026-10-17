@@ -41,6 +41,19 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+def save_local(updates: dict, path: str | os.PathLike | None = None) -> Path:
+    """Merge settings into config.local.yaml (git-ignored, personal), keeping what's already there."""
+    local = Path(path) if path else ROOT / "config.local.yaml"
+    current = {}
+    if local.exists():
+        with open(local, encoding="utf-8-sig") as f:
+            current = yaml.safe_load(f) or {}
+    merged = _deep_merge(current, updates)
+    header = "# Your personal Jarvis settings (overrides config.yaml; not committed to git).\n"
+    local.write_text(header + yaml.safe_dump(merged, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    return local
+
+
 def load_config(path: str | os.PathLike | None = None) -> Section:
     try:
         from dotenv import load_dotenv

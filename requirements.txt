@@ -1,3 +1,6 @@
+# Install with setup.ps1, not pip directly: on NVIDIA PCs setup swaps the CPU onnxruntime these packages
+# pull in for onnxruntime-gpu (the two builds share one module and must never both be installed).
+
 # core
 numpy>=2.0
 sounddevice>=0.5
