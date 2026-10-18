@@ -61,6 +61,24 @@ class Agent:
         self._claude_helper = None
         self._last_activity = time.monotonic()
         self.provider: LLMProvider = self._make(provider or cfg.llm.provider)
+        threading.Thread(target=self._keep_warm, daemon=True, name="keep-warm").start()
+
+    def _keep_warm(self):
+        """A local model is unloaded after Ollama's keep_alive (30 min idle), and reloading it made the next
+        answer take ~45 s. While Jarvis runs, touch it now and then so it stays in memory."""
+        every = float(self.cfg.llm.get("keep_warm_minutes", 20)) * 60
+        last_warm = time.monotonic()
+        while every > 0:
+            time.sleep(60)
+            p = self.provider
+            if not hasattr(p, "prime") or time.monotonic() - max(self._last_activity, last_warm) < every:
+                continue
+            if self._lock.acquire(blocking=False):    # never delay a real request
+                try:
+                    p.prime()
+                    last_warm = time.monotonic()
+                finally:
+                    self._lock.release()
 
     # ------------------------------------------------------------ providers
 
@@ -85,11 +103,12 @@ class Agent:
         return p
 
     def _fresh_conversation(self, p: LLMProvider, prime_now: bool = False):
-        """New conversation: current date + remembered facts, and the last few exchanges replayed.
+        """New conversation: current date + remembered facts. After a restart (prime_now) the last couple of
+        exchanges are replayed too; after an idle gap or an error the slate is clean, so nothing stale is repeated.
         (The system prompt only changes here, never mid-conversation, so histories stay append-only.)"""
         p.reset()
         old_prompt, p.system_prompt = p.system_prompt, self._system_prompt()
-        if self.memory:
+        if self.memory and prime_now:
             p.messages = self.memory.seed_messages()
         if hasattr(p, "prime") and (prime_now or p.system_prompt != old_prompt):
             if prime_now:
@@ -190,6 +209,23 @@ class Agent:
         turn = p.step(use_tools=False, on_text=on_text)
         return turn.text.strip() or "Done."
 
+    def _redirect(self, call):
+        """Small models pick the system volume for "turn Spotify up"; when the request names an app, the
+        app's own volume is what was meant."""
+        if call.name != "volume" or not self.toolbox.get("app_volume"):
+            return call
+        from .llm import ToolCall
+        from .router import app_named
+
+        app = app_named(getattr(self, "_request", ""))
+        if not app:
+            return call
+        args = {"app": app, "action": call.arguments.get("action") or "get"}
+        if call.arguments.get("percent") is not None:
+            args["percent"] = call.arguments["percent"]
+        log.info("  volume -> app_volume(%s): the request names %s", args, app)
+        return ToolCall(call.id, "app_volume", args)
+
     @staticmethod
     def _direct_reply(results: list[ToolResult]) -> str | None:
         spoken = [r.spoken for r in results]
@@ -210,6 +246,11 @@ class Agent:
         return reply
 
     def _execute(self, call, gate: bool = True) -> ToolResult:
+        result = self._execute_one(self._redirect(call), gate)
+        result.call = call     # the brain gets the answer to the call it actually made
+        return result
+
+    def _execute_one(self, call, gate: bool) -> ToolResult:
         tool = self.toolbox.get(call.name)
         log.info("tool %s(%s)", call.name, json.dumps(call.arguments)[:200])
         if not tool:

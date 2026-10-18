@@ -82,4 +82,11 @@ class Transcriber:
             audio, language=self.language, beam_size=1, vad_filter=True,
             condition_on_previous_text=False, initial_prompt=self.hints,
         )
-        return " ".join(s.text.strip() for s in segments).strip()
+        return " ".join(s.text.strip() for s in segments if _confident(s)).strip()
+
+
+def _confident(seg) -> bool:
+    """Whisper's own 'this wasn't speech' test, plus the repetition loops it produces on music."""
+    if getattr(seg, "no_speech_prob", 0) > 0.6 and getattr(seg, "avg_logprob", 0) < -1.0:
+        return False
+    return getattr(seg, "avg_logprob", 0) > -1.5 and getattr(seg, "compression_ratio", 0) < 2.6

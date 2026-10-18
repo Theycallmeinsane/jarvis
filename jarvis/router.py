@@ -40,6 +40,43 @@ MEDIA_APP = r"(?: (?:on|in) (?P<app>spotify|youtube|chrome|vlc|media player))?"
 MEDIA_NOUN = r"(?: (?:the |my |some |this )?(?:music|song|track|playback|spotify|video|audio|it))?"
 
 
+VOLUME_APPS = (r"spotify|chrome|youtube|discord|vlc|steam|edge|firefox|teams|zoom|browser|"
+               r"the music|music|the song|song|the game")
+LOUDNESS = re.compile(r"\b(volume|louder|quieter|softer|loud|sound|turn (?:it |that )?(?:up|down)|turn (?:up|down)|"
+                      r"increase|decrease|raise|lower|reduce|boost|mute|unmute|max(?:imi[sz]e)?|max out)\b")
+
+
+def app_named(text: str) -> str | None:
+    """The app a volume request is about ("…on Spotify", "Spotify's volume"), or None for the whole PC."""
+    m = re.search(r"\b(" + VOLUME_APPS + r")(?:'s|s)?\b", text.lower())
+    return m.group(1).removeprefix("the ") if m else None
+
+
+def app_volume_request(t: str) -> dict | None:
+    """{"app", "action", "percent"?} when a normalized request is about one app's loudness."""
+    app = app_named(t)
+    if not app or not LOUDNESS.search(t) or re.match(r"(?:play|open|launch|start|close|quit)\b", t):
+        return None
+    if re.search(r"\bunmute\b", t):
+        return {"app": app, "action": "unmute"}
+    if re.search(r"\bmute\b", t):
+        return {"app": app, "action": "mute"}
+    if re.match(r"(?:what|how loud|tell me)\b", t):
+        return {"app": app, "action": "get"}
+    n = re.search(r"\b(?:to|at) (\d{1,3})\b|\b(\d{1,3}) ?(?:%|percent)", t)
+    by = re.search(r"\bby (\d{1,3})\b", t)
+    if re.search(r"\bmax(?:imum|imi[sz]e)?\b|\bmax out\b|\bfull (?:volume|blast)\b", t):
+        return {"app": app, "action": "set", "percent": 100}
+    if n and not by:
+        return {"app": app, "action": "set", "percent": int(n.group(1) or n.group(2))}
+    step = {"percent": int(by.group(1))} if by else {}
+    if re.search(r"\b(increase|raise|up|louder|higher|boost)\b", t):
+        return {"app": app, "action": "up", **step}
+    if re.search(r"\b(decrease|lower|down|quieter|softer|reduce)\b", t):
+        return {"app": app, "action": "down", **step}
+    return None
+
+
 def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     """Return [(tool, args), ...] for a clear-cut command, or None to let the brain handle it."""
     t = normalize(text)
@@ -109,6 +146,12 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
             or re.fullmatch(r"how loud is (?:the )?" + app_re, t)
         if m:
             return [("app_volume", {"app": m.group("app"), "action": "get"})]
+
+        # anything else that names an app and is about loudness: "increase the volume on spotify",
+        # "turn up spotify's volume a bit", "can you lower spotify by 20", "max out the music"
+        hit = app_volume_request(t)
+        if hit:
+            return [("app_volume", hit)]
 
     # ---- volume
     if has("volume"):

@@ -23,8 +23,8 @@ class Memory:
         self.enabled = m.get("enabled", True)
         self.facts_path: Path = resolve_path(m.get("facts_file", "data/memory.json"))
         self.history_path: Path = resolve_path(m.get("history_file", "data/history.jsonl"))
-        self.restore_turns = int(m.get("restore_turns", 6))
-        self.restore_hours = float(m.get("restore_within_hours", 12))
+        self.restore_turns = int(m.get("restore_turns", 2))
+        self.restore_minutes = float(m.get("restore_within_minutes", 30))
         self.max_facts = int(m.get("max_facts", 100))
         self._lock = threading.Lock()
         self.facts: list[dict] = self._load_facts()
@@ -83,14 +83,16 @@ class Memory:
         """The last few exchanges, if they're recent enough to still be relevant."""
         if not self.enabled or self.restore_turns <= 0 or not self.history_path.exists():
             return []
-        cutoff = time.time() - self.restore_hours * 3600
+        cutoff = time.time() - self.restore_minutes * 60
         rows = []
         try:
             with open(self.history_path, encoding="utf-8") as f:
                 tail = f.readlines()[-self.restore_turns:]
             for line in tail:
                 row = json.loads(line)
-                if row.get("t", 0) >= cutoff and row.get("user") and row.get("assistant"):
+                # a question Jarvis asked is never replayed: brought back later, it gets asked all over again
+                if (row.get("t", 0) >= cutoff and row.get("user") and row.get("assistant")
+                        and not row["assistant"].rstrip().endswith("?")):
                     rows.append(row)
         except (OSError, ValueError):
             log.warning("couldn't read %s", self.history_path)
