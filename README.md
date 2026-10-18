@@ -62,6 +62,7 @@ Other ways to run it:
 .\jarvis.bat --wake-test         # live wake-word score meter, to tune the threshold for your mic
 .\jarvis.bat --google-setup      # connect Google Calendar + Gmail, step by step (see below)
 .\jarvis.bat --chrome-setup      # link Chrome: tabs, pages, videos and Claude by voice (see below)
+.\jarvis.bat --lights            # the lights panel: colours, effects, brightness, speed, on/off
 ```
 
 First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (10 minutes).
@@ -138,7 +139,7 @@ Logs go to `data/jarvis.log`.
 | "Play the movie Inception", "watch Friends season 2 episode 3" | `play_movie` (your own files, in VLC fullscreen; titles matched fuzzily, release tags ignored) |
 | "Pause", "skip 30 seconds", "rewind 2 minutes", "jump to 1:20:00", "subtitles on", "next audio track", "next episode", "movie volume 80", "close the movie" | `vlc_control` (real VLC state; while a movie is open these mean the movie) |
 | "What movies do I have?", "do I have Interstellar?" | `list_movies` |
-| "Set the lights to purple", "RAM rainbow mode", "lights off", "load the movie lighting profile" | `rgb` (through OpenRGB, see below) |
+| "Set the lights to purple", "dim the lights", "lights slow breathing", "lights off", "open the lights panel" | `rgb` (Gigabyte board directly, the rest through OpenRGB, see below) |
 | "What's on my calendar tomorrow?" / "add dentist Monday at 3" | `calendar_upcoming` / `calendar_add_event` |
 | "Any new emails?" / "read the one from Sara" | `gmail_unread` / `gmail_read` |
 | "Email Sara that I'll be late" | `gmail_find_address` → `gmail_send` (reads it back, asks first) / `gmail_draft` |
@@ -294,24 +295,32 @@ asks "Shall I…?" before any tool the server doesn't mark as read-only; set `al
 Keep the allow-list short with small local models, since every tool adds to the prompt. Servers' own logs go
 to `data/mcp.log`. `tests/fixtures/demo_mcp_server.py` is a 20-line example server you can copy.
 
-## RGB lighting (OpenRGB)
+## RGB lighting (Gigabyte RGB Fusion + OpenRGB)
 
-Vendor RGB apps (Gigabyte RGB Fusion, Armoury Crate, iCUE, Mystic Light...) have no public API, so Jarvis
-controls lights through [OpenRGB](https://openrgb.org), which is open source and supports Gigabyte RGB Fusion 2
-boards, most RGB RAM (ENE, Patriot, Corsair...), GPUs, fans and keyboards.
+**Gigabyte boards (RGB Fusion 2): built in, nothing to install.** Jarvis talks to the board's lighting chip (ITE
+IT5702 / IT8297) straight over USB through Windows' own HID API, with no OpenRGB, admin rights or driver. `--check`
+shows a `lights` line with your board's name when it finds the chip.
 
-1. Install OpenRGB from [openrgb.org](https://openrgb.org) (it may ask to install a small hardware-access
-   driver; motherboard and RAM lighting need it and admin rights).
-2. **Close your vendor RGB app** (e.g. RGB Fusion) and stop it starting with Windows: two programs writing
-   to the same lighting chips flicker or crash. Jarvis tells you if one is still running.
-3. In OpenRGB: *Settings > SDK Server > Start server* (and tick *Start at login* + *Start server* if you like).
-4. Say *"set the lights to purple"*, *"RAM lights rainbow"*, *"lights off"*, *"load the movie lighting profile"*.
+- Say *"set the lights to purple"*, *"lights jarvis blue"*, *"dim the lights"*, *"lights brightness 40 percent"*,
+  *"lights slow breathing"*, *"RGB Fusion rainbow"*, *"lights off"* / *"lights on"* (brings back your last look),
+  *"save this as gaming lighting profile"*, *"load the gaming lighting profile"*.
+- **Lights panel:** *"open the lights panel"*, the tray's **Lights (RGB) > Lights panel...**, or `jarvis.bat --lights`:
+  colour swatches and a colour picker, static / breathing / flashing / double flash / rainbow / random, brightness
+  and speed sliders, on/off. The tray menu also has one-click looks (Jarvis blue, Iron Man red, rainbow, off...).
+- The last look and saved profiles live in `data/lights.json`.
+- The RGB Fusion app can stay installed. Whichever program writes last wins, so if RGB Fusion keeps putting its own
+  look back (it can after sleep or a restart), close it from its tray icon or turn it off in Task Manager > Startup.
 
-**Gigabyte RGB Fusion boards:** OpenRGB talks to the board's RGB Fusion 2 controller directly (it shows up as your
-board's name, e.g. "B660M GAMING DDR4"), so *"set RGB Fusion to red"* and *"RGB Fusion off"* work without the
-RGB Fusion app, which has to stay closed. The tray icon also has a **Lights (RGB)** menu with one-click looks
-(Jarvis blue, Iron Man red, purple, warm white, rainbow, breathing, off). If OpenRGB isn't running, Jarvis starts it
-minimized with its SDK server (it looks in `C:\Tools\OpenRGB`, Program Files, or `rgb.openrgb_path`).
+**RAM, fans, GPUs, keyboards and other brands: [OpenRGB](https://openrgb.org).**
+
+1. Install OpenRGB (portable zip into `C:\Tools\OpenRGB` works). RGB RAM needs its small PawnIO driver and OpenRGB
+   running as administrator.
+2. If OpenRGB isn't running, Jarvis starts it minimized with its SDK server (it looks in `C:\Tools\OpenRGB`,
+   Program Files, or `rgb.openrgb_path`). Or turn on *Settings > SDK Server* yourself.
+3. *"RAM lights rainbow"* goes to OpenRGB; *"lights red"* sets the board directly and the other OpenRGB devices too.
+
+`config.yaml > rgb.backend`: `auto` (default, as above), `fusion` (board only) or `openrgb` (everything through
+OpenRGB, never the chip directly).
 
 Lighting steps work in routines too, e.g. `- rgb: {action: color, value: dim blue}` in `movie mode`.
 
@@ -415,6 +424,8 @@ jarvis/
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
+  fusion.py        Gigabyte RGB Fusion 2 lighting chip, driven directly (winhid.py: Windows HID via ctypes)
+  lights_panel.py  the on-screen lights controller (--lights)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
 scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)
   diagnostics.py   --check
