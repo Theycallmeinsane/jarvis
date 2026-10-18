@@ -8,6 +8,7 @@ assistant:
   user_name: null            # your name (set by the setup wizard in config.local.yaml)
   address: null              # how Jarvis addresses you: sir, ma'am, boss, your name... or null
   follow_up_seconds: 6        # keep listening (no wake word needed) right after a reply
+  follow_up_while_media: false  # skip that while music or a video plays (it would be heard as a command)
   idle_reset_minutes: 5       # start a fresh conversation after this much silence (memory carries over)
   max_tool_steps: 6           # max tool calls per request before giving up
   ack_after_seconds: 2.5      # if the brain hasn't started answering by then, acknowledge (0 = never)
@@ -17,12 +18,13 @@ memory:
   enabled: true
   facts_file: data/memory.json      # "remember that ..." facts, added to every conversation
   history_file: data/history.jsonl  # log of every exchange
-  restore_turns: 6                  # replay this many recent exchanges into a new conversation
-  restore_within_hours: 12          # ...if they happened within this many hours
+  restore_turns: 2                  # after a restart, replay this many recent exchanges (0 = none)
+  restore_within_minutes: 30        # ...if they happened within this many minutes
 
 wake_word:
   model: hey_jarvis           # built-in openWakeWord model, or a path to your own .onnx
   threshold: 0.5              # 0-1, raise if it triggers by itself, lower if it misses you
+  threshold_while_media: 0.7  # stricter while a song or video plays, so its audio doesn't wake Jarvis
   cooldown_seconds: 1.5
 
 hotkey: ctrl+alt+j            # push-to-talk from anywhere (also interrupts); null to disable
@@ -55,6 +57,7 @@ llm:
   provider: ollama            # ollama | lmstudio | openai_compat | claude   (local is the default)
   temperature: 0.2
   max_history_messages: 20    # local models only; trimmed oldest-first
+  keep_warm_minutes: 20       # re-touch a local model this often while idle so it isn't unloaded (0 = off)
   providers:
     ollama:
       base_url: http://127.0.0.1:11434   # 127.0.0.1, not localhost: avoids a 2 s IPv6 delay per request on Windows

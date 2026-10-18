@@ -19,7 +19,8 @@ from .wakeword import WakeWordDetector
 
 log = logging.getLogger(__name__)
 
-CANCEL = re.compile(r"^(never ?mind|cancel|stop|forget it|nothing)\W*$", re.I)
+CANCEL = re.compile(r"^(never ?mind|cancel|stop|forget it|nothing|shut up|be quiet|quiet|stop talking|"
+                    r"enough|that'?s enough|stop it|silence)\W*$", re.I)
 GOODBYE = re.compile(r"^(thanks?( you)?|that'?s all|goodbye|bye|go to sleep|dismissed)\W*( jarvis)?\W*$", re.I)
 YES = re.compile(r"\b(yes|yeah|yep|sure|go ahead|do it|confirm|affirmative|please do|okay|ok)\b", re.I)
 # the wake word fires before "...vis" ends, so the recording can start with the tail of it
@@ -36,6 +37,16 @@ class _Confirmation:
         self.question = question
         self.answer = False
         self.done = threading.Event()
+
+
+def _media_playing() -> bool:
+    """Is any app playing sound through Windows' media controls (Spotify, a YouTube video, VLC...)?"""
+    try:
+        from . import media
+
+        return any(s.status == "playing" for s in media.sessions())
+    except Exception:  # noqa: BLE001  (not Windows, or the media API is unavailable)
+        return False
 
 
 def say(text: str):
@@ -73,6 +84,9 @@ class VoiceAssistant:
         self.barge_in = bool(bi.get("enabled", True))
         # higher than the normal threshold: Jarvis's own voice leaks into the mic on open speakers
         self.barge_threshold = float(bi.get("threshold", 0.8))
+        # videos and songs say things that sound like "Jarvis": be stricter while something is playing
+        self.media_threshold = float(cfg.wake_word.get("threshold_while_media", 0.7))
+        self._media_playing = False
         print("Loading... (first run downloads the speech models)")
         self.mic = Microphone(cfg.audio.get("input_device"))
         self.speaker = Speaker(cfg.audio.get("output_device"))
@@ -358,13 +372,20 @@ class VoiceAssistant:
                 continue
             if follow_up <= 0:
                 break
+            if not self.cfg.assistant.get("follow_up_while_media", False) and _media_playing():
+                break   # a video or song would be heard as the next command
             text = self.listen(timeout=follow_up)   # keep chatting without the wake word
         self.chime(CHIME_DONE)
         self._set_state("idle")
 
+    def _watch_media(self):
+        while not self.stop_event.wait(3):
+            self._media_playing = _media_playing()
+
     def run(self):
         self._voice_thread = threading.current_thread()
         self.mic.start()
+        threading.Thread(target=self._watch_media, daemon=True, name="media-watch").start()
         name = self.cfg.assistant.get("name", "Jarvis")
         print(f"\n{name} is online using {self.agent.provider.label}. Say \"Hey Jarvis\". (Ctrl+C to quit)\n")
         self._set_state("idle")
@@ -396,7 +417,7 @@ class VoiceAssistant:
                 frame = self.mic.read(timeout=0.2)
                 if frame is None:
                     continue
-                score = self.wake.process(frame)
+                score = self.wake.process(frame, max(self.media_threshold, self.wake.threshold) if self._media_playing else None)
                 if score:
                     log.info("wake word (%.2f)", score)
                     self._converse_safely()
