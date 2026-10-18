@@ -200,9 +200,16 @@ def find_spotify_track(query: str) -> tuple[str, str] | None:
 
 def play_song(query: str) -> tuple[bool, str]:
     """Play a named song on Spotify, then check what's actually playing and say so honestly."""
-    hit = find_spotify_track(query)
+    try:
+        hit = find_spotify_track(query)
+    except Exception:  # noqa: BLE001  (web search down or timing out: never read its error out loud)
+        log.warning("song lookup failed for %r", query, exc_info=True)
+        hit = None
     if not hit:
-        return False, f"I couldn't find {query} on Spotify."
+        from urllib.parse import quote
+
+        os.startfile(f"spotify:search:{quote(query)}")
+        return False, f"I couldn't pin down that exact song, so I've opened a Spotify search for {query}."
     track_id, title = hit
     os.startfile(f"spotify:track:{track_id}")       # the desktop app opens the song's page
     for _ in range(12):
