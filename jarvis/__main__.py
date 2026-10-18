@@ -1,4 +1,4 @@
-"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login]"""
+"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login] [--chrome-setup]"""
 from __future__ import annotations
 
 import argparse
@@ -26,6 +26,7 @@ def main(argv=None):
     ap.add_argument("--wake-test", action="store_true", help="live wake-word score meter for tuning the threshold")
     ap.add_argument("--google-setup", nargs="?", const="", metavar="CLIENT_JSON",
                     help="guided Google Calendar + Gmail setup (opens each Google Cloud page in turn)")
+    ap.add_argument("--chrome-setup", action="store_true", help="link Chrome so Jarvis can control tabs, pages and Claude")
     ap.add_argument("--google-login", action="store_true", help="connect Google Calendar + Gmail (opens browser)")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
@@ -63,6 +64,10 @@ def main(argv=None):
         from .google_setup import run
 
         sys.exit(run(cfg, args.google_setup or None))
+    if args.chrome_setup:
+        from .chrome_setup import run as chrome_setup
+
+        sys.exit(chrome_setup(cfg))
     if args.google_login:
         from .tools.google_tools import login
 

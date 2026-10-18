@@ -114,6 +114,13 @@ class VoiceAssistant:
         from .tools.github_tools import start_watcher
 
         self.github_watch = start_watcher(cfg, self._announce)   # spoken alert when a watched build fails
+        if (cfg.get("chrome") or {}).get("enabled", True):
+            try:
+                from . import chrome_bridge
+
+                chrome_bridge.get(cfg)       # listen now, so the Chrome extension is linked before you ask
+            except Exception:  # noqa: BLE001  (websockets missing: Chrome tools fall back to shortcuts)
+                log.warning("Chrome link unavailable", exc_info=True)
 
     def _run_scheduled(self, name: str):
         """A routine's scheduled time came: run it through the brain and announce the briefing."""

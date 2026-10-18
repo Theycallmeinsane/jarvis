@@ -55,7 +55,8 @@ class Agent:
         self.memory = Memory(cfg) if (cfg.get("memory") or {}).get("enabled", True) else None
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
-            "memory": self.memory, "speak": speak, "switch_voice": switch_voice, "unduck": unduck})
+            "memory": self.memory, "speak": speak, "switch_voice": switch_voice, "unduck": unduck,
+            "confirm": self.confirm})
         self._pending_switch: str | None = None
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None

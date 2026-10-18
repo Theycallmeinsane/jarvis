@@ -170,6 +170,36 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
         if re.fullmatch(r"unmute(?: the)?(?: sound| volume| audio| computer| pc)?", t):
             return [("volume", {"action": "unmute"})]
 
+    # ---- Chrome tabs and pages, Claude
+    if has("chrome_tab"):
+        if re.fullmatch(r"close (?:this|the|my )?(?:current )?tab", t):
+            return [("chrome_tab", {"action": "close", "name": "this"})]
+        if re.fullmatch(r"(?:open )?(?:a )?new tab", t):
+            return [("chrome_tab", {"action": "new"})]
+        m = re.fullmatch(r"(?:go to |switch to )?(?:the )?(?P<d>next|previous|last) tab", t)
+        if m:
+            return [("chrome_tab", {"action": "previous" if m.group("d") in ("previous", "last") else "next"})]
+        if re.fullmatch(r"(?:reopen|restore|bring back|undo close) (?:the |my )?(?:last )?(?:closed )?tab", t):
+            return [("chrome_tab", {"action": "reopen"})]
+        m = re.fullmatch(r"(?:switch|go|change|jump) (?:back )?to (?:the |my )?(?P<n>.+?) tab", t)
+        if m:
+            return [("chrome_tab", {"action": "switch", "name": m.group("n")})]
+        m = re.fullmatch(r"close (?:the |my )?(?P<n>.+?) tab", t)
+        if m and m.group("n") not in ("other", "all", "all the other", "all other"):
+            return [("chrome_tab", {"action": "close", "name": m.group("n")})]
+    if has("chrome_tabs") and re.fullmatch(r"(?:what|which) tabs (?:do i have|are) open|list (?:my |the )?tabs", t):
+        return [("chrome_tabs", {})]
+    if has("chrome_page"):
+        m = re.fullmatch(r"scroll (?P<d>up|down)(?: a bit| the page)?", t)
+        if m:
+            return [("chrome_page", {"action": f"scroll_{m.group('d')}"})]
+        if re.fullmatch(r"(?:reload|refresh) (?:the |this )?(?:page|tab)", t):
+            return [("chrome_page", {"action": "reload"})]
+    if has("claude_chat"):
+        m = re.fullmatch(r"(?:ask|tell) (?:claude|cloud|clawed)(?: to| about| if| whether)? (?P<p>.{3,})", t)
+        if m:
+            return [("claude_chat", {"action": "ask", "prompt": m.group("p")})]
+
     # ---- time / date
     if has("get_datetime") and re.fullmatch(
             r"what(?:'s| is) the (?:time|date)(?: now| today)?|what time is it(?: now)?|"

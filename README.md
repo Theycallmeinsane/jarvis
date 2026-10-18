@@ -61,6 +61,7 @@ Other ways to run it:
 .\jarvis.bat --check             # test every component
 .\jarvis.bat --wake-test         # live wake-word score meter, to tune the threshold for your mic
 .\jarvis.bat --google-setup      # connect Google Calendar + Gmail, step by step (see below)
+.\jarvis.bat --chrome-setup      # link Chrome: tabs, pages, videos and Claude by voice (see below)
 ```
 
 First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (10 minutes).
@@ -103,7 +104,8 @@ Logs go to `data/jarvis.log`.
 | "What's the latest Python version?", "any tech news today?" | `web_lookup` (DuckDuckGo results read back, no browser) |
 | "What does this error on my screen say?", "what's open?" | `look_at_screen` (local qwen3.5 vision, or Claude) |
 | "What's the weather in Paris?" | `get_weather` (wttr.in) |
-| "Volume to 30", "mute", "louder" | `volume` |
+| "Volume to 30", "mute", "louder" | `volume` (the whole PC) |
+| "Turn Spotify up", "increase the volume on Spotify", "mute Discord" | `app_volume` (one app) |
 | "Pause the music", "next song" | `media_control` |
 | "Set a timer for 10 minutes", "remind me in an hour to stretch" | `set_timer` / `list_timers` / `cancel_timer` |
 | "Take a note: call the bank" / "read my notes" | `take_note` / `read_notes` (`data/notes.md`) |
@@ -142,7 +144,10 @@ Logs go to `data/jarvis.log`.
 | "Email Sara that I'll be late" | `gmail_find_address` → `gmail_send` (reads it back, asks first) / `gmail_draft` |
 | "Remember that…" / "what do you know about me?" / "forget…" | `remember` / `list_memories` / `forget` |
 | "Switch to Claude" / "go back to local" | `switch_model` |
-| "Ask Claude to explain quantum tunnelling" | `ask_claude` (local brain hands a hard question to Claude) |
+| "Ask Claude to explain quantum tunnelling" | `claude_chat` (claude.ai in Chrome; answer read back) or `ask_claude` (API key) |
+| "What tabs do I have open?", "switch to the YouTube tab", "close this tab" | `chrome_tabs` / `chrome_tab` |
+| "Summarize this page", "click sign in", "type hello in the search box" | `chrome_read` / `chrome_click` / `chrome_type` |
+| "Skip 30 seconds", "play the video at 1.5 speed", "scroll down" | `chrome_video` / `chrome_page` |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
 
 ### Routines (multi-step workflows, no code)
@@ -245,6 +250,29 @@ Jarvis can work with files on any drive by voice; spoken names don't need to be 
 Jarvis only changes files inside `files.allowed_roots` (default: your user folder and non-system drives).
 Windows, Program Files, ProgramData, AppData and Jarvis's own folder are always read-only, and nothing is
 overwritten: a copy gets a new name like `report (2).pdf`.
+
+## Chrome and Claude
+
+```powershell
+.\jarvis.bat --chrome-setup
+```
+
+This opens Chrome's Extensions page: turn on **Developer mode**, click **Load unpacked** and pick the
+`extension\chrome` folder (its path is copied for you). The Jarvis Control extension then links to Jarvis
+whenever both are running. It only talks to Jarvis on this PC, and Jarvis only accepts that extension.
+
+* *"What tabs do I have open?"*, *"switch to the GitHub tab"*, *"close the Gmail tab"*, *"reopen that tab"*,
+  *"close all other tabs"*, *"open youtube"*
+* *"Summarize this page"*, *"click next"*, *"type lofi beats in the search box and press enter"*, *"scroll down"*,
+  *"zoom in"*, *"mute this tab"*
+* *"Pause the video"*, *"skip 30 seconds"*, *"next video"*, *"play at 1.5 speed"*, *"full screen"*
+* *"Ask Claude …"* sends it to claude.ai (you need to be signed in there), waits for the answer and reads it
+  out; long answers are summarized as their opening with the rest on screen. *"Read Claude's answer"*,
+  *"stop Claude"*, *"open Claude"* too.
+
+Clicking anything like *buy*, *pay*, *send*, *delete* or *submit* asks first, and Jarvis never types into
+password or card fields. Without the extension, *new tab*, *close this tab*, *next tab*, *go back*, *reload*
+and *scroll* still work through keyboard shortcuts.
 
 ## MCP servers (plug in more tools)
 
@@ -378,7 +406,9 @@ jarvis/
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
-                   memory_tools.py (remember / forget)
+                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
+  chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
+extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
 scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)
   diagnostics.py   --check
 config.yaml        all settings

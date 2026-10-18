@@ -39,6 +39,9 @@ pypdf>=5.0
 python-docx>=1.1
 Send2Trash>=1.8
 
+# Chrome by voice (the Jarvis Control extension connects to Jarvis over a local WebSocket)
+websockets>=13.0
+
 # system tray
 pystray>=0.19
 

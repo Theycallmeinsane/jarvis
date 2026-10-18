@@ -51,7 +51,7 @@ stt:
   compute_type: auto          # auto | float16 | int8_float16 | int8
   language: en
   download_root: models/whisper
-  hints: "Jarvis, Spotify, YouTube, VS Code, Chrome, Notepad"   # names it should expect; add your own
+  hints: "Jarvis, Claude, Spotify, YouTube, VS Code, Chrome, Notepad"   # names it should expect; add your own
 
 llm:
   provider: ollama            # ollama | lmstudio | openai_compat | claude   (local is the default)
@@ -134,6 +134,11 @@ github:                       # GitHub by voice; uses the GitHub CLI's login (wi
   watch: []                   # repos whose failed builds Jarvis announces, e.g. [you/jarvis]
   alerts: true
   poll_minutes: 3
+
+chrome:                       # Chrome by voice through the Jarvis Control extension (jarvis.bat --chrome-setup)
+  enabled: true               # without the extension, tab and page basics still work with keyboard shortcuts
+  port: 8765                  # where Jarvis listens for the extension (127.0.0.1 only)
+  claude_wait_seconds: 90     # how long to wait for Claude's answer on claude.ai
 
 files:                        # file access by voice (browse, read, create, rename, move, tidy, delete to Recycle Bin)
   allowed_roots: auto         # where Jarvis may change files. auto = your user folder + non-system drives,
