@@ -68,6 +68,14 @@ def _matching(app: str):
     return hits, key.title()
 
 
+def _running(key: str) -> bool:
+    import psutil
+
+    key = key.replace(" ", "")
+    return any(key in (p.info["name"] or "").lower().replace(" ", "")
+               for p in psutil.process_iter(["name"]))
+
+
 def control(app: str, action: str, percent: int | None = None) -> tuple[bool, str]:
     """action: get | set | up | down | mute | unmute. Reads the real level back afterwards."""
     with _com():
@@ -75,7 +83,11 @@ def control(app: str, action: str, percent: int | None = None) -> tuple[bool, st
         if not hits:
             if label == "the music":
                 return False, "Nothing is playing, so I can't tell which app's volume you mean."
-            return False, f"{label} isn't making any sound right now, so it has no volume to change."
+            if not _running(resolve(app)):
+                return False, f"{label} isn't open."
+            # Windows only creates an app's mixer entry once it has played something since it started
+            return False, (f"{label} is open but hasn't played anything yet, so Windows has no volume for it. "
+                           "Start a song and ask again.")
         vol = hits[0][1]
         current = round(vol.GetMasterVolume() * 100)
         if action == "get":
