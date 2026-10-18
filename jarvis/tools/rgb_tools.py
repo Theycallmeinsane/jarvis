@@ -10,6 +10,7 @@ from __future__ import annotations
 import difflib
 import logging
 import re
+from pathlib import Path
 
 from .registry import Spoken, tool
 
@@ -73,6 +74,18 @@ def _conflicting_apps() -> list[str]:
     return sorted(found)
 
 
+def openrgb_path(cfg=None) -> str | None:
+    """OpenRGB.exe from config, the usual install folders, or a portable copy in C:\\Tools\\OpenRGB."""
+    import os
+
+    r = (cfg.get("rgb") or {}) if cfg is not None else {}
+    candidates = [r.get("openrgb_path"),
+                  r"C:\Tools\OpenRGB\OpenRGB.exe",
+                  os.path.expandvars(r"%ProgramFiles%\OpenRGB\OpenRGB.exe"),
+                  os.path.expandvars(r"%LOCALAPPDATA%\Programs\OpenRGB\OpenRGB.exe")]
+    return next((c for c in candidates if c and Path(c).is_file()), None)
+
+
 def _client(cfg=None):
     from openrgb import OpenRGBClient
 
@@ -81,14 +94,34 @@ def _client(cfg=None):
     try:
         return OpenRGBClient(host, port, name="Jarvis")
     except (ConnectionRefusedError, TimeoutError, OSError):
-        msg = "OpenRGB isn't running with its SDK server, so I can't reach the lights."
-        clash = _conflicting_apps()
-        if clash:
-            many = len(clash) > 1
-            msg += (f" {' and '.join(clash)} {'are' if many else 'is'} also running; close {'them' if many else 'it'} "
-                    "before using OpenRGB, because they'd both try to control the same chips.")
-        msg += " Start OpenRGB, turn on Settings > SDK server, and ask me again."
-        _fail(msg)
+        pass
+    # not running: start it ourselves (minimized, SDK server on) if it's installed
+    exe = openrgb_path(cfg)
+    if exe and r.get("auto_start", True) and host in ("127.0.0.1", "localhost"):
+        import subprocess
+        import time
+
+        log.info("starting OpenRGB: %s", exe)
+        subprocess.Popen([exe, "--server", "--server-port", str(port), "--startminimized"],
+                         cwd=str(Path(exe).parent), creationflags=0x08000000)
+        for _ in range(30):                 # it scans devices before the server answers
+            time.sleep(0.5)
+            try:
+                return OpenRGBClient(host, port, name="Jarvis")
+            except (ConnectionRefusedError, TimeoutError, OSError):
+                continue
+    if not exe:
+        msg = "OpenRGB isn't installed, and it's how I control the lights. Get it from openrgb.org."
+    else:
+        msg = "OpenRGB didn't start its SDK server, so I can't reach the lights."
+    clash = _conflicting_apps()
+    if clash:
+        many = len(clash) > 1
+        msg += (f" {' and '.join(clash)} {'are' if many else 'is'} also running; close {'them' if many else 'it'} "
+                "before using OpenRGB, because they'd both try to control the same chips.")
+    if exe:
+        msg += " Open OpenRGB, turn on Settings > SDK server, and ask me again."
+    _fail(msg)
 
 
 def _pick(devices, name: str):
@@ -121,7 +154,8 @@ def _mode_names(device) -> list[str]:
        "value": {"type": "string", "description": "colour, effect name or profile name"},
        "device": {"type": "string", "description": "optional: ram, motherboard, fans, gpu, keyboard... default all"}},
       required=["action"],
-      triggers=("rgb", "light", "lighting", "led", "colour", "color", "rainbow", "breathing", "glow", "profile"))
+      triggers=("rgb", "light", "lighting", "led", "colour", "color", "rainbow", "breathing", "glow", "profile",
+                "fusion", "gigabyte"))
 def rgb(action: str, value: str = "", device: str = "", ctx=None):
     from openrgb.utils import RGBColor
 
@@ -201,7 +235,8 @@ def rgb(action: str, value: str = "", device: str = "", ctx=None):
 def route_rgb(t: str, has) -> list[tuple[str, dict]] | None:
     if not has("rgb"):
         return None
-    noun = r"(?:rgb|lights?|lighting|leds?|pc lights|computer lights)"
+    noun = (r"(?:rgb fusion|gigabyte rgb|gigabyte lights?|fusion|rgb lights?|rgb|lights?|lighting|leds?|pc lights|"
+            r"computer lights|motherboard lights?)")
     m = re.fullmatch(r"(?:set |make |change |turn )?(?:the |my )?(?:(?P<dev>ram|memory|motherboard|fans|gpu|keyboard) )?"
                      + noun + r"(?: to)? (?P<c>[a-z #0-9 ]+)", t) \
         or re.fullmatch(r"(?:make|turn|set) (?:the |my )?" + noun + r" (?P<c>[a-z ]+?)", t)

@@ -87,6 +87,39 @@ class NotRunningTests(unittest.TestCase):
                 rt.rgb("color", "red")
 
 
+class AutoStartTests(unittest.TestCase):
+    def test_starts_openrgb_when_its_server_is_down(self):
+        calls = {"n": 0}
+
+        def client(*a, **k):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise ConnectionRefusedError
+            return "client"
+        with mock.patch("openrgb.OpenRGBClient", side_effect=client), \
+                mock.patch.object(rt, "openrgb_path", return_value=r"C:\Tools\OpenRGB\OpenRGB.exe"), \
+                mock.patch("subprocess.Popen") as popen, mock.patch("time.sleep"):
+            self.assertEqual(rt._client(load_config()), "client")
+        args = popen.call_args.args[0]
+        self.assertIn("--server", args)
+        self.assertIn("--startminimized", args)
+
+    def test_says_when_openrgb_is_missing(self):
+        with mock.patch("openrgb.OpenRGBClient", side_effect=ConnectionRefusedError), \
+                mock.patch.object(rt, "openrgb_path", return_value=None), \
+                mock.patch.object(rt, "_conflicting_apps", return_value=[]):
+            with self.assertRaisesRegex(ToolFailed, "isn't installed"):
+                rt._client(load_config())
+
+    def test_tray_presets_are_valid(self):
+        from jarvis.tray import LIGHT_PRESETS
+
+        for label, action, value in LIGHT_PRESETS:
+            self.assertIn(action, ("color", "effect", "off"))
+            if action == "color":
+                rt.parse_color(value)
+
+
 class RouterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -105,6 +138,10 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(self.r("lights off"), [("rgb", {"action": "off", "device": ""})])
         self.assertEqual(self.r("load the movie night lighting profile"),
                          [("rgb", {"action": "profile", "value": "movie night"})])
+        self.assertEqual(self.r("set RGB fusion to red"), [("rgb", {"action": "color", "value": "red", "device": ""})])
+        self.assertEqual(self.r("RGB fusion off"), [("rgb", {"action": "off", "device": ""})])
+        self.assertEqual(self.r("make the motherboard lights purple"),
+                         [("rgb", {"action": "color", "value": "purple", "device": "motherboard"})])
 
 
 if __name__ == "__main__":

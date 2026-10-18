@@ -307,7 +307,14 @@ boards, most RGB RAM (ENE, Patriot, Corsair...), GPUs, fans and keyboards.
 3. In OpenRGB: *Settings > SDK Server > Start server* (and tick *Start at login* + *Start server* if you like).
 4. Say *"set the lights to purple"*, *"RAM lights rainbow"*, *"lights off"*, *"load the movie lighting profile"*.
 
-Lighting steps work in routines too, e.g. - rgb: {action: color, value: dim blue} in movie mode.
+**Gigabyte RGB Fusion boards:** OpenRGB talks to the board's RGB Fusion 2 controller directly (it shows up as your
+board's name, e.g. "B660M GAMING DDR4"), so *"set RGB Fusion to red"* and *"RGB Fusion off"* work without the
+RGB Fusion app, which has to stay closed. The tray icon also has a **Lights (RGB)** menu with one-click looks
+(Jarvis blue, Iron Man red, purple, warm white, rainbow, breathing, off). If OpenRGB isn't running, Jarvis starts it
+minimized with its SDK server (it looks in `C:\Tools\OpenRGB`, Program Files, or `rgb.openrgb_path`).
+
+Lighting steps work in routines too, e.g. `- rgb: {action: color, value: dim blue}` in `movie mode`.
+
 ## Switching brains
 
 `config.yaml → llm.provider`:

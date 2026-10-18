@@ -18,6 +18,11 @@ STATE_COLOURS = {
     "thinking": (235, 170, 30), "speaking": (0, 200, 220), "paused": (90, 90, 90), "error": (220, 50, 50),
 }
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+# tray "Lights (RGB)" menu: one click per look, through OpenRGB (e.g. a Gigabyte RGB Fusion 2 board)
+LIGHT_PRESETS = [("Jarvis blue", "color", "jarvis blue"), ("Iron Man red", "color", "iron man red"),
+                 ("Purple", "color", "purple"), ("Warm white", "color", "warm white"),
+                 ("Dim blue", "color", "dim blue"), ("Rainbow", "effect", "rainbow"),
+                 ("Breathing", "effect", "breathing"), ("Off", "off", "")]
 APP_NAME = "Jarvis"
 
 
@@ -91,6 +96,9 @@ class TrayApp:
                 pystray.MenuItem(label, self._brain_setter(key), radio=True,
                                  checked=lambda _, k=key: self._brain() == k)
                 for label, key in self.BRAINS])),
+            pystray.MenuItem("Lights (RGB)", pystray.Menu(*[
+                pystray.MenuItem(label, self._rgb_setter(action, value))
+                for label, action, value in LIGHT_PRESETS])),
             pystray.MenuItem("Speed vs quality", pystray.Menu(*[
                 pystray.MenuItem(label, self._perf_setter(key), radio=True,
                                  checked=lambda _, k=key: (self.cfg.get("performance") or "balanced") == k)
@@ -150,6 +158,22 @@ class TrayApp:
                 self.icon.update_menu()
             threading.Thread(target=work, daemon=True).start()
         return set_brain
+
+    def _rgb_setter(self, action: str, value: str):
+        def set_lights(*_):
+            def work():
+                from .tools.builtin import ToolFailed
+                from .tools.rgb_tools import rgb
+
+                try:
+                    msg = rgb(action, value, ctx=self.assistant.agent.toolbox if self.assistant else None)
+                except ToolFailed as e:
+                    msg = str(e)
+                except Exception as e:  # noqa: BLE001
+                    msg = f"Lights: {e}"
+                self.icon.notify(msg[:250], "Jarvis lights")
+            threading.Thread(target=work, daemon=True).start()
+        return set_lights
 
     def _perf_setter(self, key: str):
         def set_perf(*_):
