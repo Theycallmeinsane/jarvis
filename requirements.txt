@@ -52,3 +52,6 @@ winrt-Windows.Foundation.Collections>=3.2
 # deeper system control: Bluetooth/Wi-Fi radios, monitor brightness over DDC/CI
 winrt-Windows.Devices.Radios>=3.2
 monitorcontrol>=4.0
+
+# RGB lighting through OpenRGB's SDK server
+openrgb-python>=0.3

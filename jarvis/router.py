@@ -154,6 +154,11 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     plan = route_system(t, has)
     if plan:
         return plan
+    from .tools.rgb_tools import route_rgb
+
+    plan = route_rgb(t, has)
+    if plan:
+        return plan
 
     # ---- desktop & windows
     if has("lock_computer") and re.fullmatch(r"lock (?:the |my )?(?:computer|pc|screen|laptop|windows)", t):

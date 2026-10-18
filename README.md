@@ -1,4 +1,4 @@
-# Jarvis Ã¢â‚¬â€ a local voice assistant for Windows
+# Jarvis ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a local voice assistant for Windows
 
 [![tests](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml/badge.svg)](https://github.com/Theycallmeinsane/jarvis/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -9,19 +9,19 @@ Windows workflows, and the answer comes out through a local open-source voice (a
 Nothing leaves your PC unless you switch the brain to Claude.
 
 ```
- mic Ã¢â€â‚¬Ã¢â€“Âº openWakeWord ("hey jarvis") Ã¢â€â‚¬Ã¢â€“Âº webrtcvad (record until you pause) Ã¢â€â‚¬Ã¢â€“Âº faster-whisper (STT)
-                                                                                 Ã¢â€â€š
- speaker Ã¢â€”â€žÃ¢â€â‚¬Ã¢â€â‚¬ Piper / Kokoro (TTS, female or male) Ã¢â€”â€žÃ¢â€â‚¬Ã¢â€â‚¬ agent Ã¢â€”â€žÃ¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº brain (Ollama Ã‚Â· LM Studio Ã‚Â· Claude Ã‚Â· any OpenAI-compatible)
-                                                        Ã¢â€â€š
-                                                        Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº Windows workflows: apps, windows, settings, media, timers...
+ mic ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº openWakeWord ("hey jarvis") ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº webrtcvad (record until you pause) ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº faster-whisper (STT)
+                                                                                 ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Å¡
+ speaker ÃƒÂ¢Ã¢â‚¬â€Ã¢â‚¬Å¾ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Piper / Kokoro (TTS, female or male) ÃƒÂ¢Ã¢â‚¬â€Ã¢â‚¬Å¾ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ agent ÃƒÂ¢Ã¢â‚¬â€Ã¢â‚¬Å¾ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº brain (Ollama Ãƒâ€šÃ‚Â· LM Studio Ãƒâ€šÃ‚Â· Claude Ãƒâ€šÃ‚Â· any OpenAI-compatible)
+                                                        ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬Å¡
+                                                        ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬ÂÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº Windows workflows: apps, windows, settings, media, timers...
 ```
 
 ## Quick start
 
-**You need:** Windows 10 or 11, a microphone, an internet connection for the first install (~2Ã¢â‚¬â€œ4 GB of
+**You need:** Windows 10 or 11, a microphone, an internet connection for the first install (~2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“4 GB of
 downloads). An NVIDIA GPU makes it faster but isn't required. Python and Ollama are installed for you if missing.
 
-1. **Get the code**: `git clone https://github.com/Theycallmeinsane/jarvis` (or *Code Ã¢â€ â€™ Download ZIP* and unzip).
+1. **Get the code**: `git clone https://github.com/Theycallmeinsane/jarvis` (or *Code ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Download ZIP* and unzip).
 2. **Install**: open PowerShell in the folder and run
 
    ```powershell
@@ -36,7 +36,7 @@ downloads). An NVIDIA GPU makes it faster but isn't required. Python and Ollama 
 4. **Talk**: say **"Hey Jarvis"** (or press **Ctrl+Alt+J**), wait for the chime, then e.g.
    *"open Spotify"*, *"what's the weather?"*, *"switch to the male voice"*, *"run work mode"*.
 
-To start Jarvis automatically, right-click the tray icon Ã¢â€ â€™ **Start with Windows**. To stop it: tray icon Ã¢â€ â€™ **Quit**.
+To start Jarvis automatically, right-click the tray icon ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ **Start with Windows**. To stop it: tray icon ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ **Quit**.
 Settings you choose live in `config.local.yaml` (personal, git-ignored); `config.yaml` holds the shared defaults.
 After pulling a new version, run `setup.ps1` again: it updates packages and keeps your settings.
 
@@ -44,7 +44,7 @@ After pulling a new version, run `setup.ps1` again: it updates packages and keep
 |---|---|
 | NVIDIA GPU, 12 GB+ VRAM | Whisper large-v3-turbo, brain qwen3.5:9b, HD voice |
 | NVIDIA GPU, 8 GB | Whisper small.en, brain qwen3.5:4b, HD voice (Kokoro on the GPU) |
-| NVIDIA GPU, 4Ã¢â‚¬â€œ6 GB | Whisper base.en, brain qwen3.5:2b, Piper voice |
+| NVIDIA GPU, 4ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“6 GB | Whisper base.en, brain qwen3.5:2b, Piper voice |
 | no NVIDIA GPU, 16 GB RAM | Whisper base.en on CPU, brain qwen3.5:2b, Piper voice |
 | no NVIDIA GPU, 8 GB RAM | Whisper base.en on CPU, brain qwen3.5:0.8b (consider `--llm claude`) |
 
@@ -67,7 +67,7 @@ First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (1
 
 ## Talking to Jarvis
 
-* **"Hey Jarvis"** Ã¢â€ â€™ a chime Ã¢â€ â€™ speak Ã¢â€ â€™ Jarvis answers.
+* **"Hey Jarvis"** ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ a chime ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ speak ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Jarvis answers.
 * For a few seconds after each answer you can keep talking **without** the wake word.
 * "Never mind" / "cancel" stops; "thanks Jarvis" / "that's all" ends the conversation.
 * **Push-to-talk:** press **Ctrl+Alt+J** anywhere instead of saying the wake word (`hotkey` in config).
@@ -78,7 +78,7 @@ First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (1
 * **Small-model safety net:** action tools (search in browser, open app, type, power, close app, media keys)
   only run if your request actually mentions that kind of action, so a 4B model can't open your browser
   when you asked for a story.
-* Risky actions (closing apps, sending email, shutdown, PowerShell) ask *"Shall IÃ¢â‚¬Â¦?"* and wait for a yes.
+* Risky actions (closing apps, sending email, shutdown, PowerShell) ask *"Shall IÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦?"* and wait for a yes.
 * **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json` and known in every future
   conversation; "what do you remember about me?" / "forget Sara". Recent exchanges (`data/history.jsonl`) are
   replayed when Jarvis restarts, so it picks up where you left off.
@@ -108,7 +108,7 @@ Logs go to `data/jarvis.log`.
 | "Set a timer for 10 minutes", "remind me in an hour to stretch" | `set_timer` / `list_timers` / `cancel_timer` |
 | "Take a note: call the bank" / "read my notes" | `take_note` / `read_notes` (`data/notes.md`) |
 | "Find my resume PDF" / "open it" | `find_files` / `open_path` |
-| "Type: dear sirÃ¢â‚¬Â¦" | `type_text` (dictation into the focused window) |
+| "Type: dear sirÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" | `type_text` (dictation into the focused window) |
 | "What's on my clipboard?" / "copy that" | `read_clipboard` / `copy_to_clipboard` |
 | "How's my computer doing?" | `system_status` (CPU, RAM, GPU, disks) |
 | "Take a screenshot" | `take_screenshot` (Pictures/Jarvis) |
@@ -136,10 +136,11 @@ Logs go to `data/jarvis.log`.
 | "Play the movie Inception", "watch Friends season 2 episode 3" | `play_movie` (your own files, in VLC fullscreen; titles matched fuzzily, release tags ignored) |
 | "Pause", "skip 30 seconds", "rewind 2 minutes", "jump to 1:20:00", "subtitles on", "next audio track", "next episode", "movie volume 80", "close the movie" | `vlc_control` (real VLC state; while a movie is open these mean the movie) |
 | "What movies do I have?", "do I have Interstellar?" | `list_movies` |
+| "Set the lights to purple", "RAM rainbow mode", "lights off", "load the movie lighting profile" | `rgb` (through OpenRGB, see below) |
 | "What's on my calendar tomorrow?" / "add dentist Monday at 3" | `calendar_upcoming` / `calendar_add_event` |
 | "Any new emails?" / "read the one from Sara" | `gmail_unread` / `gmail_read` |
-| "Email Sara that I'll be late" | `gmail_find_address` Ã¢â€ â€™ `gmail_send` (reads it back, asks first) / `gmail_draft` |
-| "Remember thatÃ¢â‚¬Â¦" / "what do you know about me?" / "forgetÃ¢â‚¬Â¦" | `remember` / `list_memories` / `forget` |
+| "Email Sara that I'll be late" | `gmail_find_address` ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `gmail_send` (reads it back, asks first) / `gmail_draft` |
+| "Remember thatÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" / "what do you know about me?" / "forgetÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" | `remember` / `list_memories` / `forget` |
 | "Switch to Claude" / "go back to local" | `switch_model` |
 | "Ask Claude to explain quantum tunnelling" | `ask_claude` (local brain hands a hard question to Claude) |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
@@ -168,7 +169,7 @@ routines:
 ```
 
 Each step is any tool from the table above with its arguments. Steps you wrote yourself run without the
-"Shall IÃ¢â‚¬Â¦?" question, so only put actions in a routine that you're happy to run unattended. Scheduled routines
+"Shall IÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦?" question, so only put actions in a routine that you're happy to run unattended. Scheduled routines
 are announced out loud (and as a notification in tray mode) while Jarvis is running.
 
 ### Adding your own workflow in Python
@@ -193,10 +194,10 @@ Add `params={...}` (JSON-schema per argument) for inputs and `dangerous=True` to
 
 The Google tools stay hidden until you connect an account. One-time setup, about 5 minutes:
 
-1. Open [Google Cloud console](https://console.cloud.google.com/) Ã¢â€ â€™ create a project (any name).
-2. **APIs & Services Ã¢â€ â€™ Library**: enable **Google Calendar API** and **Gmail API**.
-3. **APIs & Services Ã¢â€ â€™ OAuth consent screen**: External, add yourself under *Test users*.
-4. **Credentials Ã¢â€ â€™ Create credentials Ã¢â€ â€™ OAuth client ID Ã¢â€ â€™ Desktop app**, then *Download JSON*.
+1. Open [Google Cloud console](https://console.cloud.google.com/) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ create a project (any name).
+2. **APIs & Services ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Library**: enable **Google Calendar API** and **Gmail API**.
+3. **APIs & Services ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ OAuth consent screen**: External, add yourself under *Test users*.
+4. **Credentials ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Create credentials ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ OAuth client ID ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Desktop app**, then *Download JSON*.
 5. Save it as `secrets\google_credentials.json` in this folder (the `secrets/` folder is git-ignored).
 6. Run `.\jarvis.bat --google-login`. Your browser opens once to approve access; the token is saved to
    `secrets\google_token.json`.
@@ -208,7 +209,7 @@ Delete `secrets\google_token.json` to disconnect.
 ## MCP servers (plug in more tools)
 
 Any [Model Context Protocol](https://modelcontextprotocol.io) server can give Jarvis new abilities (files,
-GitHub, Spotify, home automation, databasesÃ¢â‚¬Â¦). Add it under `mcp_servers` in `config.local.yaml`:
+GitHub, Spotify, home automation, databasesÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦). Add it under `mcp_servers` in `config.local.yaml`:
 
 ```yaml
 mcp_servers:
@@ -221,19 +222,33 @@ mcp_servers:
 ```
 
 Each server's tools show up as `<server>_<tool>` and work with every brain. `confirm: auto` (the default)
-asks "Shall IÃ¢â‚¬Â¦?" before any tool the server doesn't mark as read-only; set `always` or `never` per server.
+asks "Shall IÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦?" before any tool the server doesn't mark as read-only; set `always` or `never` per server.
 Keep the allow-list short with small local models, since every tool adds to the prompt. Servers' own logs go
 to `data/mcp.log`. `tests/fixtures/demo_mcp_server.py` is a 20-line example server you can copy.
 
+## RGB lighting (OpenRGB)
+
+Vendor RGB apps (Gigabyte RGB Fusion, Armoury Crate, iCUE, Mystic Light...) have no public API, so Jarvis
+controls lights through [OpenRGB](https://openrgb.org), which is open source and supports Gigabyte RGB Fusion 2
+boards, most RGB RAM (ENE, Patriot, Corsair...), GPUs, fans and keyboards.
+
+1. Install OpenRGB from [openrgb.org](https://openrgb.org) (it may ask to install a small hardware-access
+   driver; motherboard and RAM lighting need it and admin rights).
+2. **Close your vendor RGB app** (e.g. RGB Fusion) and stop it starting with Windows: two programs writing
+   to the same lighting chips flicker or crash. Jarvis tells you if one is still running.
+3. In OpenRGB: *Settings > SDK Server > Start server* (and tick *Start at login* + *Start server* if you like).
+4. Say *"set the lights to purple"*, *"RAM lights rainbow"*, *"lights off"*, *"load the movie lighting profile"*.
+
+Lighting steps work in routines too, e.g. - rgb: {action: color, value: dim blue} in movie mode.
 ## Switching brains
 
-`config.yaml Ã¢â€ â€™ llm.provider`:
+`config.yaml ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ llm.provider`:
 
 | provider | what | setup |
 |---|---|---|
 | `ollama` (default) | local models via Ollama | `ollama pull qwen3.5:4b` |
-| `lmstudio` | LM Studio's local server | Developer tab Ã¢â€ â€™ Start server, set `model` |
-| `openai_compat` | llama.cpp server, vLLM, Groq, OpenRouter, OpenAIÃ¢â‚¬Â¦ | set `base_url`, `model`, key in `.env` |
+| `lmstudio` | LM Studio's local server | Developer tab ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Start server, set `model` |
+| `openai_compat` | llama.cpp server, vLLM, Groq, OpenRouter, OpenAIÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ | set `base_url`, `model`, key in `.env` |
 | `claude` | Anthropic Claude | `ANTHROPIC_API_KEY` in `.env` |
 
 You can switch at runtime by voice ("switch to Claude"), with `--llm`, or with `/model claude` in text mode.
@@ -267,25 +282,25 @@ All open source, all local. Pick one in setup, with `tts.voice` in `config.local
 HD voices fall back to the matching Piper voice on PCs without an NVIDIA GPU, and if Piper can't load either,
 Jarvis falls back to the Windows voice (the log says why) instead of going silent.
 
-Measured on an i5-12600K + RTX 3050: Piper medium voices speak 4Ã¢â‚¬â€œ5Ãƒâ€” faster than real time on the CPU;
-Kokoro runs 4Ã¢â‚¬â€œ7Ãƒâ€” real time on the GPU but only 0.6Ãƒâ€” on the CPU, which is why it's GPU-only. Sending each
-voice's speech through Whisper gave 8Ã¢â‚¬â€œ13% word differences for every voice (mostly how numbers are written),
+Measured on an i5-12600K + RTX 3050: Piper medium voices speak 4ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“5ÃƒÆ’Ã¢â‚¬â€ faster than real time on the CPU;
+Kokoro runs 4ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“7ÃƒÆ’Ã¢â‚¬â€ real time on the GPU but only 0.6ÃƒÆ’Ã¢â‚¬â€ on the CPU, which is why it's GPU-only. Sending each
+voice's speech through Whisper gave 8ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“13% word differences for every voice (mostly how numbers are written),
 so they're all equally clear; pick the one you like the sound of (`setup` can play a sample).
 
 Any other [Piper voice](https://huggingface.co/rhasspy/piper-voices) works too: `tts: {voice: piper, piper: {voice: en_US-kristin-medium}}`.
 
 ## Tuning
 
-* **Wake word too eager / too deaf:** `wake_word.threshold` (0.5 default; 0.6Ã¢â‚¬â€œ0.7 if it fires on TV).
+* **Wake word too eager / too deaf:** `wake_word.threshold` (0.5 default; 0.6ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“0.7 if it fires on TV).
   `.\jarvis.bat --wake-test` shows live scores so you can pick the value.
 * **A different wake word:** train one with openWakeWord's training notebook (linked from the
   [openWakeWord README](https://github.com/dscripka/openWakeWord)) and set `wake_word.model` to the
   path of the `.onnx` file.
-* **Cuts you off mid-sentence:** raise `recording.silence_ms` (800 Ã¢â€ â€™ 1200).
+* **Cuts you off mid-sentence:** raise `recording.silence_ms` (800 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 1200).
 * **Mishears names:** add them to `stt.hints` (e.g. city, app and people names).
 * **Local model does extra things you didn't ask for:** keep `max_tool_rounds: 1` (default for Ollama/LM Studio);
-  raise it to 2Ã¢â‚¬â€œ3 for 8B+ models so they can chain steps like "find my resume and open it".
-* **STT accuracy vs speed:** `stt.model` `base.en` (fastest) Ã¢â€ â€™ `small.en` (default) Ã¢â€ â€™ `large-v3-turbo` (best, GPU).
+  raise it to 2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“3 for 8B+ models so they can chain steps like "find my resume and open it".
+* **STT accuracy vs speed:** `stt.model` `base.en` (fastest) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `small.en` (default) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ `large-v3-turbo` (best, GPU).
 * **Wrong microphone:** `.\jarvis.bat --list-devices`, then set `audio.input_device` to the index or part of its name.
 * **Slow first answer:** the Ollama model is loaded at start-up and kept warm for 30 minutes (`keep_alive`).
 
@@ -296,35 +311,35 @@ Windows 11 Pro, i5-12600K, 16 GB RAM, RTX 3050 8 GB, Ollama `qwen3.5:4b` fully o
 | step | time |
 |---|---|
 | wake word | real time on the CPU |
-| Whisper `small.en` (GPU, `-Gpu` setup) | 0.2Ã¢â‚¬â€œ0.5 s per command (CPU fallback ~1Ã¢â‚¬â€œ2 s) |
-| LLM, request with one tool call | ~5Ã¢â‚¬â€œ6 s (two model calls of ~2.7 s) |
+| Whisper `small.en` (GPU, `-Gpu` setup) | 0.2ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“0.5 s per command (CPU fallback ~1ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“2 s) |
+| LLM, request with one tool call | ~5ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“6 s (two model calls of ~2.7 s) |
 | LLM, plain chat answer | ~3 s |
 | Piper voice | ~0.1 s to synthesize a 4 s sentence (CPU) |
 
-`qwen3:4b` was much slower here (9Ã¢â‚¬â€œ28 s) because it ignores the "no thinking" switch, so `qwen3.5:4b` is the default.
+`qwen3:4b` was much slower here (9ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“28 s) because it ignores the "no thinking" switch, so `qwen3.5:4b` is the default.
 
 ## Project layout
 
 ```
 jarvis/
-  app.py           voice loop (wake Ã¢â€ â€™ record Ã¢â€ â€™ STT Ã¢â€ â€™ agent Ã¢â€ â€™ TTS Ã¢â€ â€™ follow-up), barge-in
+  app.py           voice loop (wake ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ record ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ STT ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ agent ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ TTS ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ follow-up), barge-in
   tray.py          system tray icon + menu, start-with-Windows
   agent.py         tool-calling loop, confirmation, brain switching
   memory.py        remembered facts + conversation history across restarts
   routines.py      config-defined multi-step workflows + daily scheduler
   mcp_client.py    MCP servers' tools as Jarvis tools
-  vision.py        screenshot Ã¢â€ â€™ vision model (local Ollama or Claude)
+  vision.py        screenshot ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ vision model (local Ollama or Claude)
   hotkey.py        global push-to-talk hotkey
   audio.py         mic stream, speaker, chimes
   wakeword.py      openWakeWord "hey_jarvis"
   recorder.py      webrtcvad endpointing
-  stt.py           faster-whisper (CUDA Ã¢â€ â€™ CPU fallback)
+  stt.py           faster-whisper (CUDA ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ CPU fallback)
   tts.py           Piper / Kokoro / SAPI
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget)
-scripts/voice_smoke.py   Piper Ã¢â€ â€™ wake word Ã¢â€ â€™ Whisper check with no mic (also runs in GitHub Actions)
+scripts/voice_smoke.py   Piper ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ wake word ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Whisper check with no mic (also runs in GitHub Actions)
   diagnostics.py   --check
 config.yaml        all settings
 tests/             offline unit tests:  python -m unittest discover tests
