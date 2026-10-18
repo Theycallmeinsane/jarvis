@@ -1,9 +1,8 @@
-"""RGB lighting (motherboard, RAM, fans, GPU, keyboards...) through OpenRGB's SDK server.
+"""RGB lighting: Gigabyte RGB Fusion 2 motherboards directly (jarvis/fusion.py), everything else through OpenRGB.
 
-Vendor apps like Gigabyte RGB Fusion have no public API, so Jarvis talks to OpenRGB (open source, supports
-RGB Fusion 2 boards, ENE/Patriot RAM and most other brands). OpenRGB must be running with its SDK server
-on (Settings > SDK server, or start it with --server). Vendor apps that are also running can fight OpenRGB for
-the controller; Jarvis explains that rather than closing them.
+A Gigabyte board's lighting chip is driven straight over USB, with no OpenRGB, admin rights or driver. RAM, fans,
+GPUs and keyboards go through OpenRGB's SDK server when it's running (Settings > SDK server, or --server).
+Config rgb.backend: auto (default) | fusion (board only) | openrgb (never drive the chip directly).
 """
 from __future__ import annotations
 
@@ -86,7 +85,7 @@ def openrgb_path(cfg=None) -> str | None:
     return next((c for c in candidates if c and Path(c).is_file()), None)
 
 
-def _client(cfg=None):
+def _client(cfg=None, start: bool = True):
     from openrgb import OpenRGBClient
 
     r = (cfg.get("rgb") or {}) if cfg is not None else {}
@@ -97,7 +96,7 @@ def _client(cfg=None):
         pass
     # not running: start it ourselves (minimized, SDK server on) if it's installed
     exe = openrgb_path(cfg)
-    if exe and r.get("auto_start", True) and host in ("127.0.0.1", "localhost"):
+    if exe and start and r.get("auto_start", True) and host in ("127.0.0.1", "localhost"):
         import subprocess
         import time
 
@@ -147,19 +146,172 @@ def _mode_names(device) -> list[str]:
     return [m.name for m in device.modes]
 
 
-@tool("Control the PC's RGB lighting (motherboard, RAM, fans, GPU...) through OpenRGB: set a colour "
-      "(e.g. 'red', 'dim blue', 'warm white'), an effect (rainbow, breathing, static...), turn it off/on, "
-      "load or save a lighting profile, or list devices.",
-      {"action": {"type": "string", "enum": ["color", "effect", "off", "on", "profile", "save_profile", "status"]},
-       "value": {"type": "string", "description": "colour, effect name or profile name"},
+BOARD_WORDS = ("motherboard", "board", "mobo")
+ALL_WORDS = ("", "all", "everything", "pc", "computer", "lights")
+
+
+def _fusion_chip():
+    from .. import fusion
+
+    try:
+        return fusion.find()
+    except fusion.NotFound as e:
+        log.debug("No direct RGB Fusion chip: %s", e)
+    except Exception as e:  # noqa: BLE001  (HID quirks: fall back to OpenRGB)
+        log.warning("RGB Fusion chip lookup failed: %s", e)
+    return None
+
+
+def _speed_words(text: str) -> tuple[str, int | None]:
+    t = text.lower().strip()
+    for word, speed in (("very slow ", 1), ("slow ", 2), ("slower ", 3), ("fast ", 8), ("faster ", 8),
+                        ("very fast ", 10), ("quick ", 8)):
+        if t.startswith(word):
+            return t[len(word):], speed
+    return t, None
+
+
+def _brightness(text: str, now: int) -> int:
+    t = text.lower().replace("percent", "").replace("%", "").strip()
+    if t in ("up", "brighter", "more", "higher"):
+        return min(100, now + 25)
+    if t in ("down", "dimmer", "less", "lower", "dim"):
+        return max(5, now - 25)
+    if t in ("max", "full", "maximum", "100"):
+        return 100
+    if t in ("low", "min", "minimum"):
+        return 10
+    if t in ("half", "medium"):
+        return 50
+    m = re.search(r"\d{1,3}", t)
+    if not m:
+        _fail("How bright? Say a percentage, like 50 percent.")
+    return max(0, min(100, int(m.group())))
+
+
+def _fusion(action: str, value: str, chip) -> str:
+    from .. import fusion
+
+    look = fusion.current()
+    name = chip.name
+    if action == "status":
+        return Spoken(f"I control your {name} motherboard lights directly: {look.effect}, "
+                      f"{look.brightness} percent, {'on' if look.on else 'off'}.")
+    if action == "off":
+        look.on = False
+        fusion.apply(look, chip)
+        return "Lights off."
+    if action in ("color", "on"):
+        if value or action == "color":
+            try:
+                look.color = parse_color(value or "white")
+            except ValueError as e:
+                _fail(str(e))
+            if look.effect in ("color cycle", "random"):
+                look.effect = "static"
+        look.on = True
+        fusion.apply(look, chip)
+        return f"Lights set to {value}." if value else "Lights on."
+    if action == "effect":
+        wanted, speed = _speed_words(value)
+        effect = fusion.effect_name(wanted)
+        if not effect:
+            _fail(f"Your board's lights can't do {value}. They can do: {', '.join(fusion.EFFECTS)}.")
+        look.effect, look.on = effect, True
+        if speed:
+            look.speed = speed
+        fusion.apply(look, chip)
+        return f"{effect.capitalize()} on."
+    if action == "brightness":
+        look.brightness, look.on = _brightness(value, look.brightness), True
+        fusion.apply(look, chip)
+        return f"Lights at {look.brightness} percent."
+    if action == "profile":
+        saved = fusion.profiles()
+        hit = next((k for k in saved if k.lower() == value.lower()), None) or next(
+            (k for k in saved if k.lower() in difflib.get_close_matches(value.lower(), [s.lower() for s in saved],
+                                                                       n=1, cutoff=0.5)), None)
+        if not hit:
+            _fail(f"No lighting profile called {value}. Profiles: {', '.join(saved) or 'none saved'}.")
+        fusion.apply(saved[hit], chip)
+        return f"Loaded the {hit} lighting profile."
+    if action == "save_profile":
+        if not value:
+            _fail("What should I call the profile?")
+        fusion.save_profile(value, look)
+        return f"Saved the current lighting as {value}."
+    _fail(f"I can't do {action} with the lights.")
+
+
+def open_panel():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    exe = Path(sys.executable)
+    quiet = exe.with_name("pythonw.exe")
+    subprocess.Popen([str(quiet if quiet.exists() else exe), "-m", "jarvis", "--lights"],
+                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+@tool("Control the PC's RGB lighting: the Gigabyte RGB Fusion motherboard lights directly, plus RAM, fans, GPU "
+      "and others through OpenRGB. Set a colour ('red', 'dim blue', 'warm white'), an effect (rainbow, "
+      "breathing, flashing, static; 'slow breathing'), brightness (a percent, up, down), turn it off/on, load or "
+      "save a lighting profile, list devices, or open the on-screen lights panel.",
+      {"action": {"type": "string",
+                  "enum": ["color", "effect", "brightness", "off", "on", "profile", "save_profile", "status", "panel"]},
+       "value": {"type": "string", "description": "colour, effect, brightness or profile name"},
        "device": {"type": "string", "description": "optional: ram, motherboard, fans, gpu, keyboard... default all"}},
       required=["action"],
       triggers=("rgb", "light", "lighting", "led", "colour", "color", "rainbow", "breathing", "glow", "profile",
-                "fusion", "gigabyte"))
+                "fusion", "gigabyte", "brightness"))
 def rgb(action: str, value: str = "", device: str = "", ctx=None):
+    cfg = ctx.cfg if ctx else None
+    if action == "panel":
+        open_panel()
+        return "Opening the lights panel."
+    backend = ((cfg.get("rgb") or {}) if cfg is not None else {}).get("backend", "auto")
+    where = (device or "").lower().strip()
+    chip = _fusion_chip() if backend != "openrgb" and (where in ALL_WORDS or where in BOARD_WORDS) else None
+    if chip:
+        from .builtin import ToolFailed
+
+        try:
+            said = _fusion(action, value, chip)
+        except ToolFailed:
+            raise
+        except Exception as e:  # noqa: BLE001  (the chip didn't take it: OpenRGB may still manage)
+            log.warning("Direct RGB Fusion control failed, trying OpenRGB: %s", e)
+            said = None
+        finally:
+            chip.close()
+        if said is not None:
+            if where in ALL_WORDS and backend == "auto" and action not in ("status", "profile", "save_profile"):
+                _openrgb_quietly(action, value, cfg)       # RAM, fans... if OpenRGB happens to be running
+            return Spoken(said)
+    if action == "brightness":
+        _fail("I can only change brightness on the Gigabyte motherboard lights.")
+    return _openrgb(action, value, device, _client(cfg))
+
+
+def _openrgb_quietly(action: str, value: str, cfg):
+    from openrgb.utils import DeviceType
+
+    try:
+        client = _client(cfg, start=False)
+    except Exception:  # noqa: BLE001  (OpenRGB not running: the board was enough)
+        return
+    try:
+        others = [d for d in client.devices if d.type != DeviceType.MOTHERBOARD]
+        if others:
+            _openrgb(action, value, "", client, others)
+    except Exception as e:  # noqa: BLE001
+        log.info("OpenRGB devices skipped: %s", e)
+
+
+def _openrgb(action: str, value: str, device: str, client, targets=None):
     from openrgb.utils import RGBColor
 
-    client = _client(ctx.cfg if ctx else None)
     try:
         devices = client.devices
         if action == "status":
@@ -180,7 +332,7 @@ def rgb(action: str, value: str = "", device: str = "", ctx=None):
                 _fail("What should I call the profile?")
             client.save_profile(value)
             return Spoken(f"Saved the current lighting as {value}.")
-        targets = _pick(devices, device)
+        targets = targets or _pick(devices, device)
         if not targets:
             _fail(f"I don't see {device} in OpenRGB. I have: {', '.join(d.name for d in devices)}.")
         if action == "off":
@@ -237,6 +389,19 @@ def route_rgb(t: str, has) -> list[tuple[str, dict]] | None:
         return None
     noun = (r"(?:rgb fusion|gigabyte rgb|gigabyte lights?|fusion|rgb lights?|rgb|lights?|lighting|leds?|pc lights|"
             r"computer lights|motherboard lights?)")
+    if re.fullmatch(r"(?:open |show )(?:the |my )?(?:rgb fusion|gigabyte|rgb|lights?|lighting) ?(?:panel|controller|"
+                    r"control panel|controls|app)", t):
+        return [("rgb", {"action": "panel"})]
+    level = r"(?P<v>\d{1,3}(?: ?%| percent)?|max|full|half|up|down)"
+    m = re.fullmatch(r"(?:set |change |put |turn )?(?:the |my )?" + noun + r" brightness(?: to| at)? " + level, t) \
+        or re.fullmatch(r"(?:set |change )?(?:the )?brightness of (?:the |my )?" + noun + r"(?: to| at)? " + level, t) \
+        or re.fullmatch(r"(?:set |put |turn )?(?:the |my )?" + noun + r" (?:to|at) (?P<v>\d{1,3}(?: ?%| percent))", t)
+    if m:
+        return [("rgb", {"action": "brightness", "value": m.group("v")})]
+    if re.fullmatch(r"(?:dim|lower) (?:the |my )?" + noun + r"|(?:make )?(?:the |my )?" + noun + r" dimmer", t):
+        return [("rgb", {"action": "brightness", "value": "down"})]
+    if re.fullmatch(r"brighten (?:the |my )?" + noun + r"|(?:make )?(?:the |my )?" + noun + r" brighter", t):
+        return [("rgb", {"action": "brightness", "value": "up"})]
     m = re.fullmatch(r"(?:set |make |change |turn )?(?:the |my )?(?:(?P<dev>ram|memory|motherboard|fans|gpu|keyboard) )?"
                      + noun + r"(?: to)? (?P<c>[a-z #0-9 ]+)", t) \
         or re.fullmatch(r"(?:make|turn|set) (?:the |my )?" + noun + r" (?P<c>[a-z ]+?)", t)
@@ -248,7 +413,9 @@ def route_rgb(t: str, has) -> list[tuple[str, dict]] | None:
         if c == "on":
             return [("rgb", {"action": "on", "device": dev})]
         effect = re.sub(r"\s*(?:mode|effect)$", "", c)
-        if effect in ("rainbow", "breathing", "static", "wave", "cycle", "flashing", "spectrum cycle", "color cycle"):
+        if re.sub(r"^(?:very )?(?:slow|fast|quick) ", "", effect) in (
+                "rainbow", "breathing", "static", "wave", "cycle", "flashing", "spectrum cycle", "color cycle",
+                "double flash", "random", "pulse", "pulsing"):
             return [("rgb", {"action": "effect", "value": effect, "device": dev})]
         try:
             parse_color(c)

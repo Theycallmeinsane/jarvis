@@ -27,6 +27,7 @@ def main(argv=None):
     ap.add_argument("--google-setup", nargs="?", const="", metavar="CLIENT_JSON",
                     help="guided Google Calendar + Gmail setup (opens each Google Cloud page in turn)")
     ap.add_argument("--chrome-setup", action="store_true", help="link Chrome so Jarvis can control tabs, pages and Claude")
+    ap.add_argument("--lights", action="store_true", help="open the lights panel (RGB Fusion colours, effects, brightness)")
     ap.add_argument("--google-login", action="store_true", help="connect Google Calendar + Gmail (opens browser)")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
@@ -64,6 +65,10 @@ def main(argv=None):
         from .google_setup import run
 
         sys.exit(run(cfg, args.google_setup or None))
+    if args.lights:
+        from .lights_panel import run as lights_panel
+
+        sys.exit(lights_panel())
     if args.chrome_setup:
         from .chrome_setup import run as chrome_setup
 

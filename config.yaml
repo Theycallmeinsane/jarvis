@@ -140,6 +140,12 @@ chrome:                       # Chrome by voice through the Jarvis Control exten
   port: 47815                  # where Jarvis listens for the extension (127.0.0.1 only)
   claude_wait_seconds: 90     # how long to wait for Claude's answer on claude.ai
 
+rgb:                          # PC lighting ("lights purple", "dim the lights", "open the lights panel")
+  backend: auto               # auto: Gigabyte RGB Fusion board directly + other devices via OpenRGB if it runs
+                              # fusion: board only | openrgb: everything through OpenRGB
+  auto_start: true            # start OpenRGB (minimized, SDK server on) when it's needed and not running
+  port: 6742                  # OpenRGB SDK server
+
 files:                        # file access by voice (browse, read, create, rename, move, tidy, delete to Recycle Bin)
   allowed_roots: auto         # where Jarvis may change files. auto = your user folder + non-system drives,
                               # or a list, e.g. [~/Documents, ~/Downloads, "D:/"]. Reading works anywhere.
