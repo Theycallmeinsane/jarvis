@@ -90,6 +90,11 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     }
 }
 
+# ---------------------------------------------------------------- optional: Chrome by voice
+if ((-not $Yes) -and (Ask "Optional: link Chrome so Jarvis can control tabs, pages, videos and Claude?")) {
+    & $vpy -m jarvis --chrome-setup
+}
+
 # ---------------------------------------------------------------- 5. personal settings
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 if (-not $NoWizard) {
