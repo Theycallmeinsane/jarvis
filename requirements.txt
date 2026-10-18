@@ -48,3 +48,7 @@ winrt-runtime>=3.2
 winrt-Windows.Media.Control>=3.2
 winrt-Windows.Foundation>=3.2
 winrt-Windows.Foundation.Collections>=3.2
+
+# deeper system control: Bluetooth/Wi-Fi radios, monitor brightness over DDC/CI
+winrt-Windows.Devices.Radios>=3.2
+monitorcontrol>=4.0

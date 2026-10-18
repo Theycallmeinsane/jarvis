@@ -141,6 +141,13 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
                     args["message"] = m.group("msg").strip()
                 return [("set_timer", args)]
 
+    # ---- system stats, network, brightness, radios, sound output... (rules live in tools/system_ext.py)
+    from .tools.system_ext import route_system
+
+    plan = route_system(t, has)
+    if plan:
+        return plan
+
     # ---- desktop & windows
     if has("lock_computer") and re.fullmatch(r"lock (?:the |my )?(?:computer|pc|screen|laptop|windows)", t):
         return [("lock_computer", {})]
