@@ -47,6 +47,13 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
         return None
     has = lambda name: toolbox.get(name) is not None  # noqa: E731
 
+    # ---- movies in VLC first: while a movie is open, "pause" / "skip 30 seconds" mean the movie
+    from .tools.vlc_tools import route_vlc
+
+    plan = route_vlc(t, has)
+    if plan:
+        return plan
+
     # ---- media
     if has("media_control"):
         m = re.fullmatch(r"(?:pause|stop|halt)" + MEDIA_NOUN + MEDIA_APP, t)

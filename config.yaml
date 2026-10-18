@@ -98,6 +98,9 @@ tts:                          # all voices are open source and run locally
     voice: null               # part of a voice name, e.g. "David" or "Hazel"
 
 media:
+  movie_dirs: []              # extra folders with movies/series (Videos, Downloads and any D:\Movies, E:\Series... are found automatically)
+  auto_find_movie_folders: true
+  vlc_path: null              # found automatically; set if VLC is somewhere unusual
   default_app: spotify        # "play some music" with nothing open starts this; null = don't
 
 ducking:                      # turn whatever is playing down while Jarvis listens and talks
