@@ -152,6 +152,23 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     if has("take_screenshot") and re.fullmatch(r"(?:take a |grab a )?screen ?shot(?: of (?:the|my) screen)?", t):
         return [("take_screenshot", {})]
 
+    # ---- GitHub and folders
+    if has("github_notifications") and re.fullmatch(
+            r"(?:any |check |read |show |what are )?(?:my |the )?(?:new )?git ?hub notifications?(?: on github)?|"
+            r"(?:anything|what's|what is) new on git ?hub|check git ?hub", t):
+        return [("github_notifications", {})]
+    if has("github_builds"):
+        m = re.fullmatch(r"(?:did|has) (?:my |the )?(?:last |latest )?build(?: on (?P<repo>[\w .-]+?))? (?:pass|passed|"
+                         r"succeed|go green|fail)|(?:what's |what is )?(?:the )?build status(?: (?:of|on|for) "
+                         r"(?P<repo2>[\w .-]+?))?|is (?:my |the )?build (?:green|passing|broken|red)", t)
+        if m:
+            return [("github_builds", {"repo": m.group("repo") or m.group("repo2") or "", "count": 1})]
+    if has("list_folder"):
+        m = re.fullmatch(r"what(?:'s| is) (?:in|inside) (?:my |the )?(?P<f>desktop|documents|downloads|pictures|"
+                         r"music|videos)(?: folder)?", t)
+        if m:
+            return [("list_folder", {"path": m.group("f"), "sort": "newest", "count": 5})]
+
     # ---- routines: "run work mode", "good morning", "movie mode"
     if has("run_routine") and cfg is not None:
         from .routines import routines_from

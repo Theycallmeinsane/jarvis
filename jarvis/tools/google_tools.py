@@ -44,7 +44,7 @@ def login(cfg) -> str:
 
     creds_file, token_file = _paths(cfg)
     if not creds_file.exists():
-        return f"Put your OAuth client JSON at {creds_file} first (see README)."
+        return f"No OAuth client at {creds_file} yet. Run: jarvis.bat --google-setup"
     flow = InstalledAppFlow.from_client_secrets_file(str(creds_file), SCOPES)
     creds = flow.run_local_server(port=0, prompt="consent")
     token_file.parent.mkdir(parents=True, exist_ok=True)
