@@ -2,7 +2,7 @@
 // It connects out to ws://127.0.0.1:<port> (Jarvis only accepts this extension's own origin) and runs
 // a fixed set of commands: tabs, navigation, and the page actions in PAGE below. No arbitrary code.
 
-const DEFAULT_PORT = 8765;
+const DEFAULT_PORT = 47815;
 let ws = null;
 let pinger = null;
 

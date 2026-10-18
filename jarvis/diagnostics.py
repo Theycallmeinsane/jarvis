@@ -157,6 +157,11 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
     from .tools.github_tools import status_line
 
     info("github", status_line())
+    if (cfg.get("chrome") or {}).get("enabled", True):
+        from .chrome_bridge import DEFAULT_PORT, port_status
+
+        ok, message = port_status(int((cfg.get("chrome") or {}).get("port", DEFAULT_PORT)))
+        info("chrome", message if ok else "PROBLEM: " + message)
     info("hotkey", cfg.get("hotkey") or "off")
     info("routines", ", ".join(routines_from(cfg)) or "none")
     print(f"\n{'All systems go.' if not failures else f'{failures} problem(s) found.'}")
