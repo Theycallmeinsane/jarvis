@@ -1,4 +1,4 @@
-"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-login]"""
+"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login]"""
 from __future__ import annotations
 
 import argparse
@@ -24,6 +24,8 @@ def main(argv=None):
     ap.add_argument("--list-devices", action="store_true", help="show microphones and speakers")
     ap.add_argument("--check", action="store_true", help="test every component and exit")
     ap.add_argument("--wake-test", action="store_true", help="live wake-word score meter for tuning the threshold")
+    ap.add_argument("--google-setup", nargs="?", const="", metavar="CLIENT_JSON",
+                    help="guided Google Calendar + Gmail setup (opens each Google Cloud page in turn)")
     ap.add_argument("--google-login", action="store_true", help="connect Google Calendar + Gmail (opens browser)")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
@@ -57,6 +59,10 @@ def main(argv=None):
 
         print(list_devices())
         return
+    if args.google_setup is not None:
+        from .google_setup import run
+
+        sys.exit(run(cfg, args.google_setup or None))
     if args.google_login:
         from .tools.google_tools import login
 

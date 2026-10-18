@@ -34,6 +34,11 @@ google-api-python-client>=2.150
 google-auth-oauthlib>=1.2
 google-auth-httplib2>=0.2
 
+# file access: read PDFs and Word files, delete to the Recycle Bin
+pypdf>=5.0
+python-docx>=1.1
+Send2Trash>=1.8
+
 # system tray
 pystray>=0.19
 
