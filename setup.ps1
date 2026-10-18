@@ -81,6 +81,15 @@ if (Get-Command ollama -ErrorAction SilentlyContinue) {
     } else { Write-Host "$model is ready" }
 }
 
+# ---------------------------------------------------------------- optional: GitHub by voice
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    if ((-not $Yes) -and (Get-Command winget -ErrorAction SilentlyContinue) -and
+        (Ask "Optional: install the GitHub CLI so Jarvis can check your repos and builds?")) {
+        winget install --id GitHub.cli -e --accept-source-agreements --accept-package-agreements
+        Write-Host "Then sign in once (new window): gh auth login"
+    }
+}
+
 # ---------------------------------------------------------------- 5. personal settings
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 if (-not $NoWizard) {

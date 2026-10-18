@@ -153,7 +153,10 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
     info("claude", "API key found" if has_key else "no ANTHROPIC_API_KEY in .env (optional)")
     creds, token = _paths(cfg)
     info("google", "connected" if token.exists() else
-         ("credentials found, run --google-login" if creds.exists() else "not set up (optional, see README)"))
+         ("credentials found, run --google-login" if creds.exists() else "not set up (optional): jarvis.bat --google-setup"))
+    from .tools.github_tools import status_line
+
+    info("github", status_line())
     info("hotkey", cfg.get("hotkey") or "off")
     info("routines", ", ".join(routines_from(cfg)) or "none")
     print(f"\n{'All systems go.' if not failures else f'{failures} problem(s) found.'}")

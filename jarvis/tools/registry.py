@@ -67,8 +67,8 @@ class ToolBox:
     """The set of tools active for this run, plus shared context they can use."""
 
     def __init__(self, cfg, context: dict[str, Any] | None = None):
-        from . import (builtin, google_tools, memory_tools, rgb_tools, system_ext,  # noqa: F401  built-ins
-                       vlc_tools, windows)
+        from . import (builtin, files_ext, github_tools, google_tools, memory_tools, rgb_tools,  # noqa: F401  built-ins
+                       system_ext, vlc_tools, windows)
 
         self.cfg = cfg
         self.context = context or {}
