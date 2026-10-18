@@ -14,7 +14,7 @@ import threading
 log = logging.getLogger(__name__)
 
 EXTENSION_ID = "lbjbjdhghbfkdmnnmjphadllpfohiboj"   # fixed by the "key" in extension/chrome/manifest.json
-DEFAULT_PORT = 8765
+DEFAULT_PORT = 47815      # uncommon on purpose: 8765 and friends are taken by dev servers
 
 
 class NotConnected(Exception):
@@ -42,7 +42,8 @@ class Bridge:
         try:
             self._server = serve(self._handler, "127.0.0.1", self.port, origins=self.origins)
         except OSError as e:
-            log.warning("Chrome link off: port %s is busy (%s). Change chrome.port in your settings.", self.port, e)
+            log.warning("Chrome link off: port %s is busy (%s). Set chrome.port in config.local.yaml and the same "
+                        "port in the Jarvis Control extension's popup.", self.port, e)
             return self
         threading.Thread(target=self._server.serve_forever, daemon=True, name="chrome-bridge").start()
         self.listening = True
@@ -90,6 +91,30 @@ class Bridge:
         if not box.get("ok"):
             raise RuntimeError(box.get("error") or f"Chrome couldn't do {cmd}.")
         return box.get("result")
+
+
+def port_status(port: int) -> tuple[bool, str]:
+    """For --check: (ok, message) about the port the extension connects to."""
+    import socket
+
+    with socket.socket() as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return True, f"port {port} free; link Chrome with: jarvis.bat --chrome-setup"
+        except OSError:
+            pass
+    from websockets.exceptions import InvalidStatus
+    from websockets.sync.client import connect
+
+    try:   # a wrong origin: Jarvis turns it away with 403, without touching a linked extension
+        connect(f"ws://127.0.0.1:{port}/chrome", origin="http://jarvis-check.invalid", open_timeout=3).close()
+    except InvalidStatus as e:
+        if e.response.status_code == 403:
+            return True, f"Jarvis is already listening on port {port}"
+    except Exception:  # noqa: BLE001
+        pass
+    return False, (f"port {port} is used by another program. Pick a free one in config.local.yaml "
+                   "(chrome: port: ...) and set the same port in the Jarvis Control extension's popup")
 
 
 _bridge: Bridge | None = None
