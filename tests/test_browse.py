@@ -215,7 +215,7 @@ class OldExtensionTests(unittest.TestCase):
             self.assertFalse(b.outdated)
             b.version = ""
             self.assertFalse(b.outdated)
-        self.assertEqual(chrome_bridge.bundled_version(), "1.2.0")
+        self.assertEqual(chrome_bridge.bundled_version(), "1.3.0")
 
 
 class AllTools:

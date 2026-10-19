@@ -683,6 +683,361 @@ const PAGE = {
     return { ok: false, reason: `unknown action ${action}` };
   },
 
+  // ---- WhatsApp Web: the chat list (and its search), unread chats, the open chat (read it, send a message)
+  whatsapp: async function ({ action, text = "", name = "", want = "" }) {
+    if (location.hostname !== "web.whatsapp.com") return { ok: false, reason: "this tab isn't WhatsApp Web" };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const first = (sels, root = document) => {
+      for (const s of sels) { const el = [...root.querySelectorAll(s)].find(shown); if (el) return el; }
+      return null;
+    };
+    const tap = (el) => {        // WhatsApp opens a chat on mousedown, and its buttons on click
+      const r = el.getBoundingClientRect();
+      const o = { bubbles: true, cancelable: true, view: window, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+      el.dispatchEvent(new PointerEvent("pointerdown", o));
+      el.dispatchEvent(new MouseEvent("mousedown", o));
+      el.dispatchEvent(new PointerEvent("pointerup", o));
+      el.dispatchEvent(new MouseEvent("mouseup", o));
+      el.click();
+    };
+    const enter = (box) => {
+      const o = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+      box.dispatchEvent(new KeyboardEvent("keydown", o));
+      box.dispatchEvent(new KeyboardEvent("keypress", o));
+      box.dispatchEvent(new KeyboardEvent("keyup", o));
+    };
+    // the chat list (or search results): rows with a titled name, in screen order (WhatsApp positions them itself)
+    const listRoot = () => document.querySelector("#pane-side") || document.querySelector("[aria-label='Chat list' i]") ||
+                           document.querySelector("#side");
+    const rows = () => {
+      const root = listRoot();
+      if (!root) return [];
+      const all = [...root.querySelectorAll("[role=listitem], [role=row]")].filter((el) => shown(el) && el.querySelector("span[title]"));
+      return all.filter((el) => !all.some((o) => o !== el && o.contains(el)))
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+    };
+    const nameOf = (row) => { const s = row.querySelector("span[title]"); return norm((s && (s.getAttribute("title") || s.innerText)) || row.innerText.split("\n")[0]); };
+    const notReady = () => ({ ok: false, reason: document.querySelector("canvas[aria-label*='scan' i], [data-ref] canvas, canvas")
+      ? "WhatsApp Web isn't linked yet; scan the QR code with your phone first" : "WhatsApp is still loading" });
+    const main = document.querySelector("#main");
+    const chatName = () => {
+      const h = main && first(["header span[title]", "header span[dir=auto]", "header [title]"], main);
+      return h ? norm(h.getAttribute("title") || h.innerText) : "";
+    };
+
+    const searchSels = ["#side div[contenteditable='true'][role='textbox']", "div[contenteditable='true'][data-tab='3']",
+                        "[contenteditable='true'][aria-label*='search' i]", "#side input[type='text']",
+                        "input[aria-label*='search' i]", "[role='textbox'][aria-label*='search' i]"];
+    const typeSearch = (box, words) => {
+      box.focus();
+      if (box.isContentEditable) {
+        document.execCommand("selectAll", false);
+        document.execCommand(words ? "insertText" : "delete", false, words);
+      } else {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(box, words);
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    };
+
+    if (action === "chats" || action === "unread") {
+      if (!listRoot()) return notReady();
+      const old = first(searchSels);       // a search left from before filters the list: clear it
+      if (old && norm(old.isContentEditable ? old.innerText : old.value)) { typeSearch(old, ""); old.blur(); await sleep(800); }
+      const list = rows();
+      if (action === "chats") return { ok: true, names: list.map(nameOf).slice(0, 40) };
+      const chats = list.map((row) => {
+        const badge = row.querySelector("span[aria-label*='unread message' i]");
+        if (!badge) return null;
+        const n = parseInt(((badge.getAttribute("aria-label") || "").match(/\d+/) || [norm(badge.innerText)])[0], 10);
+        return { name: nameOf(row), count: n || 1 };
+      }).filter(Boolean);
+      return { ok: true, chats };
+    }
+    if (action === "search") {
+      let box = first(searchSels);
+      if (!box) {
+        const b = first(["button[aria-label*='search' i]", "[data-icon='search']", "[data-icon*='search' i]"]);
+        if (b) { tap(b.closest("button, [role=button]") || b); await sleep(500); }
+        box = first(searchSels);
+      }
+      if (!box) return listRoot() ? { ok: false, reason: "I can't find WhatsApp's search box" } : notReady();
+      typeSearch(box, text);
+      await sleep(1600);
+      return { ok: true, names: rows().map(nameOf).slice(0, 40) };
+    }
+    if (action === "open_chat") {
+      const list = rows();
+      const el = (want && list.find((r) => nameOf(r) === want)) || list[Number(name)];
+      if (!el) return { ok: false, reason: "that chat isn't in the list any more" };
+      tap(el.querySelector("span[title]") || el);
+      await sleep(1000);
+      return { ok: true, name: nameOf(el), open: chatName() };
+    }
+    if (action === "chat_name") {
+      if (!main) return { ok: false, reason: "no chat is open; say open my chat with someone first" };
+      return { ok: true, chat: chatName() };
+    }
+    if (action === "read_messages") {
+      if (!main) return { ok: true, noChat: true };
+      const who = chatName();
+      const bubbles = [...main.querySelectorAll("div.message-in, div.message-out")]
+        .filter((el) => !el.parentElement.closest(".message-in, .message-out"));
+      const messages = bubbles.slice(-6).map((b) => {
+        const out = b.classList.contains("message-out");
+        const c = b.querySelector(".copyable-text[data-pre-plain-text]");
+        const pre = c ? c.getAttribute("data-pre-plain-text") || "" : "";
+        const m = pre.match(/^\s*\[([^\]]*)\]\s*(.*?):\s*$/);         // "[10:30, 19/10/2026] Ahmad Khan: "
+        const textOf = (el) => {           // emoji are <img alt="😂"> inside the text
+          const k = el.cloneNode(true);
+          k.querySelectorAll("img[alt]").forEach((i) => i.replaceWith(i.alt));
+          return norm(k.textContent);
+        };
+        let said = c ? textOf(c.querySelector("span.selectable-text") || c) : "";
+        if (!said) {
+          const plain = norm(b.innerText.replace(/\b\d{1,2}:\d{2}(\s*[ap]\.?m\.?)?/gi, ""));
+          said = b.querySelector("audio, [data-icon*='audio' i], [data-icon*='ptt' i]") ? "a voice message"
+            : b.querySelector("video, [data-icon*='video' i]") ? "a video"
+            : b.querySelector("[data-icon*='document' i]") ? "a document"
+            : b.querySelector("img[alt*='sticker' i]") ? "a sticker"
+            : b.querySelector("img[src^='blob:']") ? "a photo"
+            : plain || (b.querySelector("img") ? "a photo" : "something I can't read");
+        }
+        return { who: out ? "You" : (m && m[2]) || who || "Them", text: said, time: m ? m[1].split(",")[0] : "" };
+      });
+      return { ok: true, chat: who, messages };
+    }
+    if (action === "send_message") {
+      if (!main) return { ok: false, reason: "no chat is open; say open my chat with someone first" };
+      const box = first(["footer div[contenteditable='true'][role='textbox']", "div[contenteditable='true'][data-tab='10']",
+                         "[contenteditable='true'][aria-label^='Type a message' i]", "footer [contenteditable='true']"], main);
+      if (!box) return { ok: false, reason: "I can't find WhatsApp's message box" };
+      if (norm(box.innerText)) return { ok: false, reason: "there's already a draft in the message box; send or clear it first" };
+      const lastOut = () => { const o = main.querySelectorAll(".message-out"); return o.length ? norm(o[o.length - 1].innerText) : ""; };
+      const before = lastOut();
+      box.focus();
+      document.execCommand("insertText", false, text);
+      await sleep(300);
+      if (!norm(box.innerText)) return { ok: false, reason: "WhatsApp didn't take the text" };
+      const foot = box.closest("footer") || main;
+      const send = first(["button[aria-label='Send' i]", "[data-icon='send']", "[data-icon*='send' i]"], foot);
+      if (send) tap(send.closest("button, [role=button]") || send); else enter(box);
+      await sleep(800);
+      const went = () => !norm(box.innerText) || (lastOut() !== before && lastOut().includes(norm(text).slice(0, 30)));
+      if (!went()) { enter(box); await sleep(600); }     // the button didn't take it: Enter sends in WhatsApp
+      return { ok: true, sent: went(), chat: chatName() };
+    }
+    return { ok: false, reason: `unknown action ${action}` };
+  },
+
+  // ---- Reddit (the shreddit UI): the post in view; its vote buttons live in the post's shadow root
+  reddit: async function ({ action }) {
+    if (!/(^|\.)reddit\.com$/.test(location.hostname)) return { ok: false, reason: "this tab isn't Reddit" };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const rect = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.height || !el.parentElement ? r : el.parentElement.getBoundingClientRect();
+    };
+    const shown = (el) => { const r = rect(el); return r.width > 0 && r.height > 0; };
+    const deep = (root, sel) => {          // querySelectorAll that also looks inside (nested) open shadow roots
+      const out = [];
+      const walk = (n) => {
+        if (!n) return;
+        out.push(...n.querySelectorAll(sel));
+        for (const e of n.querySelectorAll("*")) if (e.shadowRoot) walk(e.shadowRoot);
+      };
+      walk(root);
+      return out;
+    };
+    const inPost = (post, sel) => [...deep(post.shadowRoot, sel), ...deep(post, sel)];
+    const posts = () => [...document.querySelectorAll("shreddit-post, [data-testid='post-container']")]
+      .filter((el) => shown(el) && !(el.parentElement && el.parentElement.closest("shreddit-post, [data-testid='post-container']")));
+    const LINE = Math.min(innerHeight * 0.35, 320);
+    const current = () => {
+      const all = posts();
+      const kept = window.__jarvisPost;    // the one Jarvis moved to, while it's still on screen
+      if (kept && all.includes(kept)) { const r = rect(kept); if (r.bottom > 90 && r.top < innerHeight - 90) return { item: kept, all }; }
+      const dist = (el) => { const r = rect(el); return r.top <= LINE && r.bottom >= LINE ? 0 : Math.min(Math.abs(r.top - LINE), Math.abs(r.bottom - LINE)); };
+      return { item: all.slice().sort((a, b) => dist(a) - dist(b))[0] || null, all };
+    };
+    const flash = (el) => { const o = el.style.outline; el.style.outline = "2px solid #ff4500"; setTimeout(() => { el.style.outline = o; }, 1500); };
+
+    if (action === "next" || action === "previous") {
+      const fwd = action === "next";
+      const { item, all } = current();
+      const ordered = all.slice().sort((a, b) => rect(a).top - rect(b).top);
+      const target = item ? ordered[ordered.indexOf(item) + (fwd ? 1 : -1)] : null;
+      if (!target) { window.__jarvisPost = null; scrollBy({ top: (fwd ? 1 : -1) * innerHeight * 0.85, behavior: "smooth" }); return { ok: true, did: "scroll" }; }
+      scrollBy({ top: rect(target).top - 72, behavior: "smooth" });   // below the sticky header
+      window.__jarvisPost = target;
+      flash(target);
+      return { ok: true, did: "post" };
+    }
+    const { item } = current();
+    if (!item) return { ok: false, reason: "I can't see a post on screen" };
+    const pressed = (b) => !!b && b.getAttribute("aria-pressed") === "true";
+    const button = (kind) => inPost(item, `button[${kind}]`).find(shown) ||
+      inPost(item, "button, [role=button]").find((b) => shown(b) && (b.getAttribute("aria-label") || "").toLowerCase() === kind);
+
+    if (action === "read") {
+      const a = (n) => norm(item.getAttribute(n));
+      const title = a("post-title") || norm((item.querySelector("[slot=title], h1, h3, a[data-testid='post-title']") || {}).innerText);
+      const body = norm((item.querySelector("[slot='text-body'], [data-post-click-location='text-body'], .md") || {}).innerText);
+      const sub = a("subreddit-prefixed-name") || norm((item.querySelector("a[href^='/r/']") || {}).innerText);
+      return { ok: true, title, author: a("author"), subreddit: sub, score: a("score"), comments: a("comment-count"), body: body.slice(0, 1200) };
+    }
+    if (action === "upvote" || action === "downvote" || action === "unvote") {
+      const up = button("upvote");
+      const down = button("downvote");
+      if (!up && !down) return { ok: false, reason: "I can't find this post's vote buttons" };
+      if (action === "unvote") {
+        const on = pressed(up) ? up : pressed(down) ? down : null;
+        if (!on) return { ok: true, already: true };
+        on.click();
+        return { ok: true, was: on === up ? "upvote" : "downvote" };
+      }
+      const b = action === "upvote" ? up : down;
+      if (!b) return { ok: false, reason: `I can't find the ${action} button` };
+      if (pressed(b)) return { ok: true, already: true };
+      b.click();
+      return { ok: true };
+    }
+    if (action === "save" || action === "unsave") {
+      // Save sits in the post's "..." menu: open it, then pick Save / Remove from saved
+      const label = (b) => norm(b.innerText || b.getAttribute("aria-label")).toLowerCase();
+      const isSave = (b) => /^save$/.test(label(b));
+      const isSaved = (b) => /^(unsave|remove from saved|saved)$/.test(label(b));
+      const items = () => [...inPost(item, "[role=menuitem], li, button"), ...deep(document, "[role=menuitem]")].filter(shown);
+      let opened = false;
+      if (!items().some((b) => isSave(b) || isSaved(b))) {
+        const more = inPost(item, "button, [role=button]").find((b) => shown(b) &&
+          /more options|user actions|overflow|^more$/i.test(b.getAttribute("aria-label") || ""));
+        if (more) { more.click(); opened = true; await sleep(700); }
+      }
+      const close = () => opened && document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      const hit = items().find(action === "save" ? isSave : isSaved);
+      if (hit) { hit.click(); return { ok: true }; }
+      const other = items().find(action === "save" ? isSaved : isSave);
+      close();
+      if (other) return { ok: true, already: true };
+      return { ok: false, reason: "I can't find Reddit's save option on this post" };
+    }
+    if (action === "pause" || action === "play") {
+      const v = inPost(item, "video")[0] || deep(document, "video").find((x) => !x.paused);
+      if (!v) return { ok: false, reason: "this post has no video" };
+      action === "pause" ? v.pause() : v.play();
+      return { ok: true };
+    }
+    return { ok: false, reason: `unknown action ${action}` };
+  },
+
+  // ---- X (Twitter): the post in view (article[data-testid=tweet]), its like / bookmark / repost buttons
+  x: async function ({ action }) {
+    if (!/(^|\.)(x|twitter)\.com$/.test(location.hostname)) return { ok: false, reason: "this tab isn't X" };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const tid = (root, id) => [...root.querySelectorAll(`[data-testid='${id}']`)].find(shown) || null;
+
+    if (action === "my_profile") {
+      for (let i = 0; i < 24; i++) {        // X draws its side bar a moment after the page loads
+        const a = document.querySelector("a[data-testid='AppTabBar_Profile_Link']");
+        if (a) { a.click(); return { ok: true, url: a.href }; }
+        await sleep(250);
+      }
+      return { ok: false, reason: "I can't find your profile link; are you signed in?" };
+    }
+    const tweets = () => {
+      const all = [...document.querySelectorAll("article[data-testid='tweet']")].filter(shown);
+      return all.length ? all : [...document.querySelectorAll("article")].filter(shown);
+    };
+    const LINE = Math.min(innerHeight * 0.35, 320);
+    const current = () => {
+      const all = tweets();
+      const kept = window.__jarvisTweet;    // the one Jarvis moved to, while it's still on screen
+      if (kept && all.includes(kept)) { const r = kept.getBoundingClientRect(); if (r.bottom > 90 && r.top < innerHeight - 90) return { item: kept, all }; }
+      const dist = (el) => { const r = el.getBoundingClientRect(); return r.top <= LINE && r.bottom >= LINE ? 0 : Math.min(Math.abs(r.top - LINE), Math.abs(r.bottom - LINE)); };
+      return { item: all.slice().sort((a, b) => dist(a) - dist(b))[0] || null, all };
+    };
+    const flash = (el) => { const o = el.style.outline; el.style.outline = "2px solid #1d9bf0"; setTimeout(() => { el.style.outline = o; }, 1500); };
+
+    if (action === "next" || action === "previous") {
+      const fwd = action === "next";
+      const { item, all } = current();
+      const ordered = all.slice().sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
+      const target = item ? ordered[ordered.indexOf(item) + (fwd ? 1 : -1)] : null;
+      if (!target) { window.__jarvisTweet = null; scrollBy({ top: (fwd ? 1 : -1) * innerHeight * 0.85, behavior: "smooth" }); return { ok: true, did: "scroll" }; }
+      scrollBy({ top: target.getBoundingClientRect().top - 60, behavior: "smooth" });   // below the sticky header
+      window.__jarvisTweet = target;
+      flash(target);
+      return { ok: true, did: "post" };
+    }
+    const { item } = current();
+    if (!item) return { ok: false, reason: "I can't see a post on screen" };
+
+    if (action === "read") {
+      const nameBox = item.querySelector("[data-testid='User-Name']");
+      const parts = nameBox ? nameBox.innerText.split("\n").map(norm).filter(Boolean) : [];
+      return { ok: true, author: parts[0] || "", handle: parts.find((p) => p.startsWith("@")) || "",
+               text: norm((item.querySelector("[data-testid='tweetText']") || {}).innerText),
+               context: norm((item.querySelector("[data-testid='socialContext']") || {}).innerText),
+               media: !!item.querySelector("[data-testid='tweetPhoto'], [data-testid='videoPlayer'], video"),
+               liked: !!tid(item, "unlike"), reposted: !!tid(item, "unretweet"), saved: !!tid(item, "removeBookmark") };
+    }
+    if (action === "like" || action === "unlike") {
+      const on = tid(item, "unlike");
+      const off = tid(item, "like");
+      if (action === "like" ? on : !on) return { ok: true, already: true };
+      const b = action === "like" ? off : on;
+      if (!b) return { ok: false, reason: "I can't find this post's like button" };
+      b.click();
+      return { ok: true };
+    }
+    if (action === "save" || action === "unsave") {
+      let on = tid(item, "removeBookmark");
+      let off = tid(item, "bookmark");
+      if (!on && !off) {                    // some layouts keep Bookmark in the share menu
+        const share = [...item.querySelectorAll("[aria-label*='share' i]")].find(shown);
+        if (share) {
+          share.click();
+          await sleep(600);
+          const pick = (re) => [...document.querySelectorAll("[role=menuitem]")].find((m) => shown(m) && re.test(norm(m.innerText)));
+          on = pick(/^remove (from )?bookmarks?$/i);
+          off = pick(/^bookmark$/i);
+          if ((action === "save" && !off) || (action === "unsave" && !on)) document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        }
+      }
+      if (action === "save" ? on && !off : off && !on) return { ok: true, already: true };
+      const b = action === "save" ? off : on;
+      if (!b) return { ok: false, reason: "I can't find this post's bookmark button" };
+      b.click();
+      return { ok: true };
+    }
+    if (action === "repost") {
+      if (tid(item, "unretweet")) return { ok: true, already: true };
+      const b = tid(item, "retweet");
+      if (!b) return { ok: false, reason: "this post can't be reposted" };
+      b.click();
+      let c = null;
+      for (let i = 0; i < 12 && !c; i++) { await sleep(150); c = [...document.querySelectorAll("[data-testid='retweetConfirm']")].find(shown); }
+      if (!c) {
+        document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        return { ok: false, reason: "X didn't show its repost button" };
+      }
+      c.click();
+      return { ok: true };
+    }
+    if (action === "pause" || action === "play") {
+      const v = item.querySelector("video") || [...document.querySelectorAll("video")].find((x) => !x.paused);
+      if (!v) return { ok: false, reason: "this post has no video" };
+      action === "pause" ? v.pause() : v.play();
+      return { ok: true };
+    }
+    return { ok: false, reason: `unknown action ${action}` };
+  },
+
   // ---- claude.ai: the chat box is a ProseMirror editor; answers carry data-is-streaming while being written
   claudeState: function () {
     const answers = [...document.querySelectorAll("[data-is-streaming], .font-claude-response, .font-claude-message")]

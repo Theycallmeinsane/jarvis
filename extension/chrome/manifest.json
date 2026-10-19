@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Jarvis Control",
-  "version": "1.2.0",
-  "description": "Lets your Jarvis voice assistant control Chrome: tabs, pages, links, videos, bookmarks, history, Instagram, Facebook and Claude. Talks only to Jarvis on this PC (127.0.0.1).",
+  "version": "1.3.0",
+  "description": "Lets your Jarvis voice assistant control Chrome: tabs, pages, links, videos, bookmarks, history, Instagram, Facebook, WhatsApp Web, Reddit, X and Claude. Talks only to Jarvis on this PC (127.0.0.1).",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAze+mUa+DLk1m1xYdDvh5TiGxCZj+lIb2csbKdzzoU+w0l5Rr+Bga2LcknfwiFecr5G5jo1h0pPzUNPQOUlRrD50PO9fb2YzvWDZ+QGfABJ6YiMXdkZIm16Nwga/8LucGYFkJKeBWZxnI/K5DQJUJKk6gjIvgekEuiq41K7cY/yu0qDraVuUgdswfjoWXPy/DY5nO84QoO4uID9bvtw+UyLTiMrnQmr3nQo9wCSP1w1myyJynEDtgsOKEwUmP9HPBgl3WTEvFbencB1OViFp/HTto0T2JIjILsMpsyXRCclEhHaHemQZsewtPT+xKZGBKXzYZj7dUqE6B5fDBpEekjQIDAQAB",
   "minimum_chrome_version": "120",
   "permissions": ["tabs", "scripting", "alarms", "storage", "sessions", "bookmarks", "history"],
