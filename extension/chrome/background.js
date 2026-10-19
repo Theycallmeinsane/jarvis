@@ -132,6 +132,32 @@ async function handle(cmd, a) {
       else throw new Error(`Unknown action ${a.action}`);
       return true;
     }
+    case "bookmarks": {
+      if (a.action === "add") {
+        const t = a.tabId ? await chrome.tabs.get(a.tabId) : await activeTab();
+        if (!/^https?:|^file:/.test(t.url || "")) throw new Error("Chrome can't bookmark this page.");
+        const [had] = await chrome.bookmarks.search({ url: t.url });
+        if (had) return { added: false, title: had.title, url: had.url };
+        const b = await chrome.bookmarks.create({ parentId: "1", title: a.title || t.title, url: t.url });  // bookmarks bar
+        return { added: true, title: b.title, url: b.url };
+      }
+      const out = [];
+      const walk = (nodes, folder) => {
+        for (const n of nodes) {
+          if (n.url) out.push({ title: n.title, url: n.url, folder, added: n.dateAdded || 0 });
+          if (n.children) walk(n.children, n.title || folder);
+        }
+      };
+      walk(await chrome.bookmarks.getTree(), "");
+      return out.slice(0, a.max || 5000);
+    }
+    case "history": {
+      const query = { text: a.text || "", startTime: a.since || Date.now() - (a.days || 30) * 86400000, maxResults: a.max || 200 };
+      if (a.until) query.endTime = a.until;
+      const items = await chrome.history.search(query);
+      return items.filter((h) => /^https?:/.test(h.url || "")).map((h) => ({
+        title: h.title || "", url: h.url, last: h.lastVisitTime || 0, visits: h.visitCount || 0 }));
+    }
     case "run": {
       const fn = PAGE[a.fn];
       if (!fn) throw new Error(`Unknown page action ${a.fn}`);
@@ -239,6 +265,135 @@ const PAGE = {
     } else return { ok: false, reason: `unknown action ${action}` };
     return { ok: true, paused: v.paused, muted: v.muted, time: Math.round(v.currentTime),
              duration: Math.round(v.duration || 0), rate: v.playbackRate, title: document.title };
+  },
+
+  // ---- YouTube's own buttons: skip ad, captions, like, subscribe, theater mode
+  youtube: function ({ action }) {
+    if (!/(^|\.)youtube\.com$/.test(location.hostname)) return { ok: false, reason: "that only works on YouTube", host: location.hostname };
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const first = (sel) => [...document.querySelectorAll(sel)].find(shown) || null;
+    const pressed = (b) => b.getAttribute("aria-pressed") === "true";
+    if (action === "skip_ad") {
+      const skip = first(".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, " +
+                         ".ytp-ad-skip-button-container button, button[id^='skip-button']");
+      if (skip) { skip.click(); return { ok: true }; }
+      const ad = document.querySelector(".html5-video-player.ad-showing");
+      return { ok: false, reason: ad ? "this ad can't be skipped yet" : "there's no ad playing" };
+    }
+    if (action === "captions_on" || action === "captions_off" || action === "captions") {
+      const b = first(".ytp-subtitles-button");
+      if (!b || b.getAttribute("aria-disabled") === "true") return { ok: false, reason: "this video has no captions" };
+      const want = action === "captions" ? !pressed(b) : action === "captions_on";
+      if (pressed(b) === want) return { ok: true, already: true, on: want };
+      b.click();
+      return { ok: true, on: want };
+    }
+    if (action === "like" || action === "unlike") {
+      const b = first("like-button-view-model button, #segmented-like-button button, #like-button button, " +
+                      "ytd-toggle-button-renderer#like-button button, button[aria-label*='like this video' i]");
+      if (!b) return { ok: false, reason: "I can't see the like button" };
+      if (pressed(b) === (action === "like")) return { ok: true, already: true };
+      b.click();
+      return { ok: true };
+    }
+    if (action === "subscribe") {
+      const b = first("#subscribe-button button, ytd-subscribe-button-renderer button, yt-subscribe-button-view-model button");
+      if (!b) return { ok: false, reason: "I can't see a subscribe button" };
+      const said = (b.innerText || b.getAttribute("aria-label") || "").trim();
+      if (/subscribed|unsubscribe/i.test(said)) return { ok: true, already: true };
+      b.click();
+      return { ok: true };
+    }
+    if (action === "theater") {
+      const b = first(".ytp-size-button");
+      if (!b) return { ok: false, reason: "theater mode is only on a YouTube video page" };
+      const was = !!document.querySelector("ytd-watch-flexy[theater]");
+      b.click();
+      return { ok: true, on: !was };
+    }
+    if (action === "channel") {
+      const a = first("ytd-video-owner-renderer #channel-name a, #owner #channel-name a, #channel-name a");
+      const b = first("#subscribe-button button, ytd-subscribe-button-renderer button, yt-subscribe-button-view-model button");
+      return { ok: true, channel: a ? a.innerText.trim() : "", title: document.title.replace(/ - YouTube$/, ""),
+               subscribed: !!b && /subscribed|unsubscribe/i.test(b.innerText || b.getAttribute("aria-label") || "") };
+    }
+    return { ok: false, reason: `unknown action ${action}` };
+  },
+
+  // ---- hands-free reading: scroll slowly until told to stop (or the page ends, or you touch the wheel)
+  autoscroll: function ({ action = "start", speed = 0 }) {
+    const s = window.__jarvisScroll || (window.__jarvisScroll = { timer: 0, speed: 1.5, acc: 0, idle: 0 });
+    const stop = () => {
+      clearInterval(s.timer);
+      s.timer = 0;
+      removeEventListener("wheel", s.off, true);
+      removeEventListener("keydown", s.off, true);
+      removeEventListener("touchstart", s.off, true);
+    };
+    if (action === "stop") { const was = !!s.timer; stop(); return { ok: true, running: false, was }; }
+    if (action === "faster") s.speed = Math.min(25, s.speed * 1.7);
+    else if (action === "slower") s.speed = Math.max(0.4, s.speed / 1.7);
+    else if (speed) s.speed = speed;
+    // the thing that scrolls: the page, or (in some web apps) the biggest scrolling box
+    const target = () => {
+      const doc = document.scrollingElement || document.documentElement;
+      if (doc.scrollHeight > innerHeight + 4) return doc;
+      const boxes = [...document.querySelectorAll("*")].filter((el) => {
+        const st = getComputedStyle(el);
+        return /(auto|scroll)/.test(st.overflowY) && el.scrollHeight > el.clientHeight + 4;
+      });
+      boxes.sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth);
+      return boxes[0] || doc;
+    };
+    if (!s.timer) {
+      const el = target();
+      s.idle = 0;
+      s.off = (e) => { if (e.isTrusted) stop(); };
+      addEventListener("wheel", s.off, true);
+      addEventListener("keydown", s.off, true);
+      addEventListener("touchstart", s.off, true);
+      s.timer = setInterval(() => {
+        s.acc += s.speed;
+        const step = Math.floor(s.acc);
+        if (!step) return;
+        s.acc -= step;
+        const before = el.scrollTop;
+        el.scrollTop = before + step;
+        s.idle = el.scrollTop === before ? s.idle + 1 : 0;
+        if (s.idle > 250) stop();          // ~4 s at the bottom (feeds get a moment to load more)
+      }, 16);
+    }
+    return { ok: true, running: true, speed: Math.round(s.speed * 10) / 10 };
+  },
+
+  // ---- the site's own search box: "search this site for usb cables"
+  sitesearch: function ({ text }) {
+    const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+    const sel = "input[type=search], [role=searchbox], input[role=combobox], input[name=q], input[name=query], " +
+                "input[name=search], input[name=s], input[name=k], input[name=keyword], input[name=search_query], " +
+                "input[placeholder*='search' i], input[aria-label*='search' i], textarea[name=q], textarea[aria-label*='search' i]";
+    let box = [...document.querySelectorAll(sel)].find(shown);
+    if (!box) {   // a magnifier that opens the box
+      const open = [...document.querySelectorAll("button, [role=button], a")].find((b) => shown(b) &&
+        /^(search|open search|show search)$/i.test((b.getAttribute("aria-label") || b.title || b.innerText || "").trim()));
+      if (open) open.click();
+      box = [...document.querySelectorAll(sel)].find(shown);
+    }
+    if (!box) return { ok: false, reason: "no search box on this page", host: location.hostname };
+    box.focus();
+    const proto = box.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(box, text);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    const opts = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    const go = box.dispatchEvent(new KeyboardEvent("keydown", opts));
+    box.dispatchEvent(new KeyboardEvent("keypress", opts));
+    box.dispatchEvent(new KeyboardEvent("keyup", opts));
+    if (go && box.form) {
+      const before = location.href;
+      setTimeout(() => { if (location.href === before) box.form.requestSubmit ? box.form.requestSubmit() : box.form.submit(); }, 400);
+    }
+    return { ok: true, host: location.hostname };
   },
 
   // ---- numbered links: "show links", then "click 7" (like Vimium hints)

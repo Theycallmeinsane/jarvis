@@ -234,11 +234,12 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     plan = route_rgb(t, has)
     if plan:
         return plan
-    # ---- Instagram / Facebook, and surfing (numbered links, results, site search, random sites)
+    # ---- Instagram / Facebook, bookmarks / history / YouTube buttons, and surfing (links, results, site search)
+    from .tools.browse import route_browse
     from .tools.social import route_social
     from .tools.web import route_web
 
-    plan = route_social(t, has) or route_web(t, has)
+    plan = route_social(t, has) or route_browse(t, has) or route_web(t, has)
     if plan:
         return plan
 

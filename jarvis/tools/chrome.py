@@ -17,6 +17,8 @@ from .registry import Spoken, tool
 
 CLAUDE_URL = "https://claude.ai/new"
 SETUP_HINT = "Chrome isn't linked to me yet. Run jarvis.bat --chrome-setup once, then try again."
+RELOAD_HINT = ("Chrome is still running the old Jarvis extension. Open chrome://extensions, press the reload arrow "
+               "on Jarvis Control, then ask me again.")
 TAB_WORDS = ("tab", "chrome", "browser", "page", "website", "site", "window")
 RISKY_CLICK = re.compile(r"\b(buy|pay|purchase|order|checkout|check out|delete|remove|send|post|publish|submit|"
                          r"confirm|subscribe|unsubscribe|transfer|sign out|log out|logout|place)\b", re.I)
@@ -46,6 +48,8 @@ def _call(ctx, cmd: str, args: dict | None = None, timeout: float = 15):
     except NotConnected:
         raise ToolFailed(SETUP_HINT) from None
     except (RuntimeError, TimeoutError) as e:
+        if re.match(r"Unknown (?:command|page action)", str(e)):      # the extension predates this command
+            raise ToolFailed(RELOAD_HINT) from None
         raise ToolFailed(str(e)) from None
 
 
@@ -253,15 +257,22 @@ def chrome_type(text: str, field: str = "", submit: bool = False, ctx=None):
     return Spoken(f"Typed it{' and pressed Enter' if submit else ''}.")
 
 
+YOUTUBE_ACTIONS = ["skip_ad", "captions_on", "captions_off", "like", "unlike", "subscribe", "theater"]
+
+
 @tool("Control the video on the current Chrome tab (YouTube etc.): play, pause, skip forward or back some seconds, "
-      "restart, next video, speed, full screen, mute, or status.",
+      "restart, next video, speed, full screen, mute, or status. On YouTube also: skip the ad, captions on or off, "
+      "like, subscribe to the channel (asks first), theater mode.",
       {"action": {"type": "string", "enum": ["play", "pause", "toggle", "forward", "back", "restart", "next",
-                                             "speed", "fullscreen", "mute", "unmute", "status"]},
+                                             "speed", "fullscreen", "mute", "unmute", "status", *YOUTUBE_ACTIONS]},
        "seconds": {"type": "integer", "description": "For forward/back (default 10)"},
        "rate": {"type": "number", "description": "For speed, e.g. 1.5"}},
       required=["action"], enabled=chrome_enabled,
-      triggers=("video", "youtube", "skip", "rewind", "forward", "speed", "full screen", "fullscreen", "seconds"))
+      triggers=("video", "youtube", "skip", "rewind", "forward", "speed", "full screen", "fullscreen", "seconds",
+                "ad", "captions", "subtitles", "subscribe", "theater"))
 def chrome_video(action: str, seconds: int = 10, rate: float = 1.0, ctx=None):
+    if action in YOUTUBE_ACTIONS:
+        return _youtube(action, ctx)
     r = _call(ctx, "run", {"fn": "media", "args": {"action": action, "seconds": seconds, "rate": rate}})
     if not r.get("ok"):
         raise ToolFailed(f"I couldn't: {r.get('reason')}.")
@@ -270,6 +281,34 @@ def chrome_video(action: str, seconds: int = 10, rate: float = 1.0, ctx=None):
         return Spoken(f"{'Paused' if r['paused'] else 'Playing'} at {m}:{s:02d} of {r['duration'] // 60} minutes.")
     return Spoken({"forward": f"Skipped {seconds} seconds.", "back": f"Went back {seconds} seconds.",
                    "speed": f"Speed {r.get('rate')}x."}.get(action, "Done."))
+
+
+def _youtube(action: str, ctx):
+    if action == "subscribe":
+        about = _call(ctx, "run", {"fn": "youtube", "args": {"action": "channel"}})
+        if not about.get("ok"):
+            raise ToolFailed(f"I couldn't: {about.get('reason')}.")
+        if about.get("subscribed"):
+            return Spoken("You're already subscribed.")
+        confirm = ctx.context.get("confirm") if ctx else None
+        channel = about.get("channel") or "this channel"
+        if not confirm or not confirm(f"Shall I subscribe to {channel}?"):
+            return Spoken("Okay, I didn't subscribe.")
+    r = _call(ctx, "run", {"fn": "youtube", "args": {"action": action}})
+    if not r.get("ok"):
+        host = r.get("host", "")
+        if action in ("like", "unlike") and re.search(r"instagram\.com|facebook\.com", host):
+            from .social import social                 # "like this video" on a reel
+
+            return social(action, ctx=ctx)
+        raise ToolFailed(f"I couldn't: {r.get('reason')}.")
+    if r.get("already"):
+        return Spoken({"like": "You've already liked it.", "unlike": "You hadn't liked it.",
+                       "subscribe": "You're already subscribed.",
+                       "captions_on": "Captions are already on.", "captions_off": "Captions are already off."}[action])
+    return Spoken({"skip_ad": "Skipped the ad.", "captions_on": "Captions on.", "captions_off": "Captions off.",
+                   "like": "Liked.", "unlike": "Removed your like.", "subscribe": "Subscribed.",
+                   "theater": "Theater mode on." if r.get("on") else "Theater mode off."}[action])
 
 
 # ------------------------------------------------------------------ Claude (claude.ai in Chrome)
