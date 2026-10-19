@@ -232,6 +232,13 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     plan = route_rgb(t, has)
     if plan:
         return plan
+    # ---- Instagram / Facebook, and surfing (numbered links, results, site search, random sites)
+    from .tools.social import route_social
+    from .tools.web import route_web
+
+    plan = route_social(t, has) or route_web(t, has)
+    if plan:
+        return plan
 
     # ---- desktop & windows
     if has("lock_computer") and re.fullmatch(r"lock (?:the |my )?(?:computer|pc|screen|laptop|windows)", t):

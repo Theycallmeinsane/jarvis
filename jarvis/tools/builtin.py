@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ctypes
 import datetime as dt
-import difflib
 import json
 import logging
 import os
@@ -17,6 +16,7 @@ from pathlib import Path
 
 import requests
 
+from .. import fuzzy
 from ..config import resolve_path
 from .registry import Spoken, tool
 
@@ -157,8 +157,7 @@ def _match_app(name: str) -> dict | None:
     contains = sorted((a for a in apps if q in a["Name"].lower()), key=lambda a: len(a["Name"]))
     if contains:
         return contains[0]
-    close = difflib.get_close_matches(q, [a["Name"].lower() for a in apps], n=1, cutoff=0.6)
-    return next((a for a in apps if a["Name"].lower() == close[0]), None) if close else None
+    return fuzzy.best(q, apps, key=lambda a: a["Name"], cutoff=0.72)      # "spotty", "v s code", "note pad"
 
 
 @tool("Open / launch an application installed on this PC (e.g. Spotify, Chrome, VS Code, Steam, Settings).",
@@ -173,6 +172,12 @@ def open_app(name: str):
     if key in ALIASES:
         os.startfile(ALIASES[key])
         return f"Opened {name}."
+    from .chrome import SITES
+
+    site = fuzzy.best(key, list(SITES), cutoff=0.85)          # "instagram", "face book": the website, not an app
+    if site:
+        webbrowser.open("https://" + SITES[site])
+        return f"Opened {site.title()} in the browser."
     try:
         os.startfile(name)
         return f"Opened {name}."

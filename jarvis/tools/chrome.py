@@ -6,12 +6,12 @@ with keyboard shortcuts sent to the Chrome window.
 """
 from __future__ import annotations
 
-import difflib
 import re
 import time
 import urllib.parse
 import webbrowser
 
+from .. import fuzzy
 from .builtin import ToolFailed
 from .registry import Spoken, tool
 
@@ -73,6 +73,10 @@ def _url(target: str) -> str:
     key = t.lower().removeprefix("the ").removesuffix(" website").removesuffix(" site").strip()
     if key in SITES:
         return "https://" + SITES[key]
+    if "." not in key and len(key.split()) <= 3:
+        hit = fuzzy.best(key, list(SITES), cutoff=0.85)          # "insta gram", "red it", "git hub"
+        if hit:
+            return "https://" + SITES[hit]
     if re.match(r"https?://", t):
         return t
     if re.fullmatch(r"(localhost|[\w-]+(\.[\w-]+)+)(:\d+)?(/\S*)?", t.replace(" ", "")):
@@ -103,8 +107,9 @@ def find_tab(tabs: list[dict], name: str) -> dict | None:
     best, score = None, 0.0
     for t in tabs:
         hay = f"{t.get('title', '')} {t.get('url', '')}".lower()
-        s = 1.0 if want in hay else max(
-            [difflib.SequenceMatcher(None, want, w).ratio() for w in re.findall(r"[a-z0-9]+", hay)] or [0])
+        s = 1.0 if want in hay else max(fuzzy.score(want, _site(t.get("url", ""))),
+                                        fuzzy.score(want, t.get("title") or ""),
+                                        max((fuzzy.score(want, w) for w in re.findall(r"[a-z0-9]+", hay)), default=0))
         if s > score:
             best, score = t, s
     return best if score >= 0.75 else None

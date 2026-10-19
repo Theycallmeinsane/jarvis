@@ -13,11 +13,12 @@ routines:
 from __future__ import annotations
 
 import datetime as dt
-import difflib
 import logging
 import threading
 import time
 from typing import Callable
+
+from . import fuzzy
 
 log = logging.getLogger(__name__)
 
@@ -33,8 +34,8 @@ def find(cfg, name: str) -> tuple[str, dict] | None:
     key = name.lower().strip()
     if key in routines:
         return key, routines[key]
-    close = difflib.get_close_matches(key, list(routines), n=1, cutoff=0.5)
-    return (close[0], routines[close[0]]) if close else None
+    hit = fuzzy.best(key, list(routines), cutoff=0.7)        # "good mourning", "movie mod"
+    return (hit, routines[hit]) if hit else None
 
 
 def run_steps(toolbox, routine: dict) -> list[str]:
