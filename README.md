@@ -151,6 +151,9 @@ Logs go to `data/jarvis.log`.
 | "Open Instagram reels", "like this post", "next post", "DM Sara saying hi" (asks first) | `social` (Instagram, Facebook) |
 | "Show links" then "click 7", "open the second result", "find pricing on this page" | `chrome_links` / `chrome_results` / `chrome_find` |
 | "Search for lofi beats on YouTube", "search Daraz for headphones", "surprise me" | `site_search` / `random_site` |
+| "Skip the ad", "turn on captions", "like this video", "subscribe" (asks first) | `chrome_video` (YouTube) |
+| "Open my bank bookmark", "bookmark this page", "open the page I was reading about rust" | `chrome_bookmarks` / `chrome_history` |
+| "Keep scrolling", "faster", "stop scrolling", "search this site for usb cables" | `chrome_autoscroll` / `search_this_site` |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
 
 ### Routines (multi-step workflows, no code)
@@ -269,6 +272,8 @@ whenever both are running. It only talks to Jarvis on this PC, and Jarvis only a
 * *"Summarize this page"*, *"click next"*, *"type lofi beats in the search box and press enter"*, *"scroll down"*,
   *"zoom in"*, *"mute this tab"*
 * *"Pause the video"*, *"skip 30 seconds"*, *"next video"*, *"play at 1.5 speed"*, *"full screen"*
+* On YouTube: *"skip the ad"* (once YouTube offers Skip), *"turn on captions"* / *"subtitles off"*,
+  *"like this video"*, *"subscribe to this channel"* (asks first), *"theater mode"*
 * *"Ask Claude …"* sends it to claude.ai (you need to be signed in there), waits for the answer and reads it
   out; long answers are summarized as their opening with the rest on screen. *"Read Claude's answer"*,
   *"stop Claude"*, *"open Claude"* too.
@@ -285,6 +290,21 @@ whenever both are running. It only talks to Jarvis on this PC, and Jarvis only a
   DuckDuckGo, ChatGPT, Perplexity.
 * *"Find pricing on this page"* jumps to the words. *"Open a random website"*, *"surprise me"*, *"open a random
   Wikipedia article"*, *"open a random game"* or *"comic"* open something interesting (well-known sites only).
+
+### Bookmarks, history and hands-free reading
+
+* *"Bookmark this page"*, *"open my bank bookmark"*, *"open bookmark jarvis repo"*, *"what are my bookmarks"*,
+  *"show my bookmarks"*. A rough or misheard name still finds it (*"darrass"* opens your Daraz bookmark).
+* *"Open the page I was reading about rust ownership"*, *"open the video I was watching yesterday about
+  sourdough"*, *"search my history for vercel pricing"*: it opens the page itself, not the search that led
+  there. *"What sites did I visit today?"*, *"open my history"*.
+* *"Keep scrolling"* scrolls the page slowly by itself; *"scroll faster"*, *"scroll slower"*,
+  *"stop scrolling"*. Touching the mouse wheel or a key stops it too.
+* *"Search this site for usb cables"* uses the open site's own search box (or a Google search of that site
+  when it has none). *"Search this page for pricing"* finds the words on the page.
+
+After pulling a new version of Jarvis, press the reload arrow on Jarvis Control in `chrome://extensions` once so
+Chrome runs the new extension (Jarvis tells you if it's still on the old one).
 
 ### Instagram and Facebook
 
@@ -454,7 +474,8 @@ jarvis/
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude),
-                   web.py (numbered links, results, site search, random sites), social.py (Instagram, Facebook)
+                   web.py (numbered links, results, site search, random sites), social.py (Instagram, Facebook),
+                   browse.py (bookmarks, history, auto-scroll, this site's search)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
   fuzzy.py         forgiving matching for misheard names (spacing, sound-alikes, number words)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)

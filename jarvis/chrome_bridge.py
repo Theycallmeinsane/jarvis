@@ -10,6 +10,7 @@ import itertools
 import json
 import logging
 import threading
+from functools import lru_cache
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,21 @@ DEFAULT_PORT = 47815      # uncommon on purpose: 8765 and friends are taken by d
 
 class NotConnected(Exception):
     pass
+
+
+@lru_cache(maxsize=1)
+def bundled_version() -> str:
+    """The extension version in this copy of Jarvis (extension/chrome/manifest.json)."""
+    from .config import ROOT
+
+    try:
+        return json.loads((ROOT / "extension" / "chrome" / "manifest.json").read_text("utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
+def _parts(version: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in version.split(".") if p.isdigit())
 
 
 class Bridge:
@@ -31,10 +47,16 @@ class Bridge:
         self._lock = threading.Lock()
         self._server = None
         self.listening = False
+        self.version = ""            # what the connected extension says it is
 
     @property
     def connected(self) -> bool:
         return self._conn is not None
+
+    @property
+    def outdated(self) -> bool:
+        """Chrome is still running an older extension than the one in this folder (it needs a reload)."""
+        return bool(self.version and bundled_version()) and _parts(self.version) < _parts(bundled_version())
 
     def start(self) -> "Bridge":
         from websockets.sync.server import serve
@@ -62,6 +84,12 @@ class Bridge:
                 try:
                     msg = json.loads(raw)
                 except ValueError:
+                    continue
+                if msg.get("hello"):
+                    self.version = str(msg.get("version") or "")
+                    if self.outdated:
+                        log.warning("Chrome has Jarvis Control %s but this folder has %s: press reload on it in "
+                                    "chrome://extensions", self.version, bundled_version())
                     continue
                 waiter = self._pending.get(msg.get("id"))
                 if waiter:
