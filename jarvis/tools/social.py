@@ -202,17 +202,27 @@ def route_social(t: str, has) -> list[tuple[str, dict]] | None:
         re.fullmatch(r"(?:open|show|go to|check)(?: me)? (?:my |the )?" + pages + r" (?:on|in) " + site, t)
     if m:
         return [("social", {"action": "open", "site": m.group("site"), "page": m.group("page")})]
-    m = re.fullmatch(r"(?P<a>like|unlike|save|unsave) (?:this|the|that) (?:post|reel|photo|picture|pic)", t)
+    # "like this post on instagram": the same commands, aimed at that site's tab
+    on = re.fullmatch(r"(?P<rest>.+?) (?:on|in) " + site, t)
+    there = {"site": on.group("site")} if on else {}
+    rest = on.group("rest") if on else t
+    video = "|video" if on else ""          # a bare "next video" / "pause the video" stays with the media keys
+    m = re.fullmatch(r"(?P<a>like|unlike|save|unsave) (?:this|the|that) (?:post|reel|photo|picture|pic"
+                     + video + ")", rest)
     if m:
-        return [("social", {"action": m.group("a")})]
-    m = re.fullmatch(r"(?:go to |show me )?(?:the )?(?P<d>next|previous|last) (?:post|reel|story)", t)
+        return [("social", {"action": m.group("a"), **there})]
+    m = re.fullmatch(r"(?:go to |show me |skip to )?(?:the )?(?P<d>next|previous|last) (?:post|reel|story"
+                     + video + ")", rest)
     if m:
-        return [("social", {"action": "previous" if m.group("d") in ("previous", "last") else "next"})]
-    if re.fullmatch(r"(?:read|what does) (?:this|the) (?:post|caption)(?: say)?", t):
-        return [("social", {"action": "read"})]
-    m = re.fullmatch(r"(?P<a>pause|play|resume) (?:the |this )?(?:story|reel)", t)
+        return [("social", {"action": "previous" if m.group("d") in ("previous", "last") else "next", **there})]
+    if re.fullmatch(r"(?:read|what does) (?:this|the) (?:post|caption)(?: say)?", rest):
+        return [("social", {"action": "read", **there})]
+    m = re.fullmatch(r"(?P<a>pause|play|resume) (?:the |this )?(?:story|reel" + video + ")", rest)
     if m:
-        return [("social", {"action": "pause" if m.group("a") == "pause" else "play"})]
+        return [("social", {"action": "pause" if m.group("a") == "pause" else "play", **there})]
+    m = re.fullmatch(r"(?P<a>follow|unfollow) (?:this|them|him|her|this account|this page|this person)", rest)
+    if m:
+        return [("social", {"action": m.group("a"), **there})]
     m = re.fullmatch(r"(?:open|show)(?: me)? (?:my |the )?(?:chat|conversation|messages|dms) with (?P<n>.+)", t)
     if m:
         return [("social", {"action": "open_chat", "target": m.group("n")})]
@@ -228,7 +238,4 @@ def route_social(t: str, has) -> list[tuple[str, dict]] | None:
     m = re.fullmatch(r"(?:post a |write a |leave a )?comment (?:saying|that) (?P<m>.+)", t)
     if m:
         return [("social", {"action": "comment", "text": m.group("m")})]
-    m = re.fullmatch(r"(?P<a>follow|unfollow) (?:this|them|him|her|this account|this page|this person)", t)
-    if m:
-        return [("social", {"action": m.group("a")})]
     return None

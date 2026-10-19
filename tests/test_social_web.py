@@ -188,6 +188,18 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(self.r("comment saying great shot"), [("social", {"action": "comment", "text": "great shot"})])
         self.assertIsNone(self.r("send an email to bob saying hi"))           # email stays with the brain
 
+    def test_naming_the_site(self):
+        self.assertEqual(self.r("like this post on instagram"), [("social", {"action": "like", "site": "instagram"})])
+        self.assertEqual(self.r("skip to the next video on facebook"),
+                         [("social", {"action": "next", "site": "facebook"})])
+        self.assertEqual(self.r("play the reel on insta"), [("social", {"action": "play", "site": "insta"})])
+        self.assertEqual(self.r("follow this account on instagram"),
+                         [("social", {"action": "follow", "site": "instagram"})])
+        # without a site, videos and songs stay with the media keys and Spotify
+        self.assertIsNone(self.r("next video"))
+        self.assertEqual(self.r("pause the video")[0][0], "media_control")
+        self.assertEqual(self.r("play the story"), [("play_song", {"song": "the story"})])
+
     def test_surfing_phrases(self):
         self.assertEqual(self.r("show links"), [("chrome_links", {"action": "show"})])
         self.assertEqual(self.r("click seven"), [("chrome_links", {"action": "click", "number": 7})])

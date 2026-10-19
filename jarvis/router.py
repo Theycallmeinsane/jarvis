@@ -121,7 +121,9 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
             song = m.group("song").strip()
             generic = re.fullmatch(r"(?:the |my |some |this |a |that )?(?:music|song|track|playlist|spotify|it|"
                                    r"something|anything|video|audio)(?: (?:on|in) spotify)?", song)
-            if not generic and len(song) > 2:
+            social = re.fullmatch(r".+ (?:on|in) (?:instagram|insta|facebook|fb|messenger)|(?:this|the) reel|"
+                                  r"this story", song)              # "play the reel on instagram" is Chrome's
+            if not generic and not social and len(song) > 2:
                 return [("play_song", {"song": song})]
 
     # ---- one app's volume: "spotify volume to 30", "turn spotify down", "mute discord", "music volume up"

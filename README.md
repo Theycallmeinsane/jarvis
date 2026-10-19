@@ -293,7 +293,8 @@ Sign in to them in Chrome once; Jarvis acts on the tab that's open.
 * *"Open Instagram reels / explore / messages / notifications / stories"*, *"open Facebook marketplace / watch /
   groups / friends / memories"*, *"open nasa on Instagram"*, *"search Instagram for #sunset"*.
 * The post, reel or story in view: *"like this post"*, *"save this post"*, *"read this post"*, *"next post"*,
-  *"previous reel"*, *"next story"*, *"pause the story"*.
+  *"previous reel"*, *"next story"*, *"pause the story"*. Add *"on Instagram"* or *"on Facebook"* when both are
+  open (*"like this video on Facebook"*, *"play the reel on Instagram"*).
 * Chats: *"open my chat with Ahmed"* (a misheard name still finds *Ahmad Khan*), *"read this chat"*,
   *"send a message saying see you at 5"*, *"DM Sara saying running late"*.
 * *"Comment saying great shot"*, *"follow this account"*, *"unfollow this account"*.
