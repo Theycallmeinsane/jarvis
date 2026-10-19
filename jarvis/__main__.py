@@ -1,4 +1,4 @@
-"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login] [--chrome-setup]"""
+"""python -m jarvis [--tray] [--text] [--llm claude] [--models] [--model NAME] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login] [--chrome-setup]"""
 from __future__ import annotations
 
 import argparse
@@ -14,6 +14,9 @@ def main(argv=None):
     ap.add_argument("--text", action="store_true", help="type instead of talk (no mic needed)")
     ap.add_argument("--speak", action="store_true", help="in --text mode, also speak replies")
     ap.add_argument("--llm", help="brain to use: ollama | lmstudio | openai_compat | claude")
+    ap.add_argument("--models", action="store_true", help="list your Ollama models and which one Jarvis uses")
+    ap.add_argument("--model", metavar="NAME",
+                    help="use this Ollama model from now on (part of the name is enough: llama, gemma3, auto)")
     ap.add_argument("--voice", "--tts", dest="tts",
                     help="voice: friday | amy | jarvis | friday-hd | heart-hd | bella-hd | jarvis-hd | windows")
     ap.add_argument("--setup", action="store_true", help="first-run wizard: voice, name, mic, brain")
@@ -73,17 +76,30 @@ def main(argv=None):
 
         print(login(cfg))
         return
+    if args.models:
+        from .llm.ollama_models import print_models
+
+        sys.exit(print_models(cfg))
+    if args.model:
+        from .llm.ollama_models import choose_model
+
+        if choose_model(cfg, args.model):
+            sys.exit(1)
+        if not (args.text or args.tray or args.check):
+            return
+        cfg = load_config(args.config)     # e.g. --model llama --text: try it right away
     if args.performance:
         from .config import save_local
-        from .hardware import performance_settings
+        from .hardware import detect, performance_settings, suggested_model
 
-        s = performance_settings(args.performance)
+        hw = detect()
+        s = performance_settings(args.performance, hw)
         path = save_local(s)
-        print(f"Saved '{args.performance}' to {path.name}: Whisper {s['stt']['model']}, "
-              f"brain {s['llm']['providers']['ollama']['model']}, answers after {s['recording']['silence_ms']} ms "
-              "of silence. Restart Jarvis to apply.")
-        model = s["llm"]["providers"]["ollama"]["model"]
-        print(f"(If you don't have it yet: ollama pull {model})")
+        print(f"Saved '{args.performance}' to {path.name}: Whisper {s['stt']['model']}, answers after "
+              f"{s['recording']['silence_ms']} ms of silence. Restart Jarvis to apply.")
+        model = suggested_model(args.performance, hw)
+        print(f"Your brain model is unchanged (see jarvis.bat --models). {model} suits '{args.performance}' on this "
+              f"PC if you want it: ollama pull {model}, then jarvis.bat --model {model}")
         return
     if args.setup:
         from .setup_wizard import run_wizard

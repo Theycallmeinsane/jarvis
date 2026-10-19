@@ -575,10 +575,42 @@ def switch_voice(voice: str, ctx=None):
 # ---------------------------------------------------------------- brains
 
 @tool("Switch Jarvis's brain / language model. 'local' = Ollama on this PC; 'claude' = Anthropic Claude; "
-      "'lmstudio' = LM Studio server; 'openai_compat' = any OpenAI-compatible server.",
-      {"provider": {"type": "string", "enum": ["local", "claude", "lmstudio", "openai_compat"]}})
-def switch_model(provider: str, ctx=None):
-    return ctx.context["switch_model"](provider)
+      "'lmstudio' = LM Studio server; 'openai_compat' = any OpenAI-compatible server. When the user names a "
+      "local model (llama, gemma, mistral, qwen, deepseek...), use provider 'local' and put the name in model.",
+      {"provider": {"type": "string", "enum": ["local", "claude", "lmstudio", "openai_compat"]},
+       "model": {"type": "string", "description": "Ollama model as the user said it, e.g. 'llama' or 'gemma 3'"}},
+      required=[])
+def switch_model(provider: str = "", model: str = "", ctx=None):
+    if not (provider or model):
+        return "Which brain or model should I switch to?"
+    return Spoken(ctx.context["switch_model"](provider or "local", model))
+
+
+@tool("Say which brain / model Jarvis is using now, or list the Ollama models installed on this PC.",
+      {"what": {"type": "string", "enum": ["current", "installed"],
+                "description": "current = the model in use; installed = every local model"}}, required=[])
+def list_models(what: str = "installed", ctx=None):
+    from ..llm import ollama_models as om
+
+    brain = ctx.context.get("brain")
+    p = brain() if brain else None
+    other = p is not None and p.name != "ollama"        # Claude, LM Studio...
+    try:
+        installed = om.list_models(om.ollama_url(ctx.cfg))
+    except om.OllamaUnavailable as e:
+        return Spoken(f"I'm using {p.label}. {e}" if other else str(e))
+    if other:
+        using = f"I'm using {p.label}."
+    else:   # (no agent in routines/tests: the model the config resolves to)
+        pick = om.resolve(installed, p.model if p is not None else om.configured_model(ctx.cfg))[0]
+        using = f"I'm using {om.say_name(pick['name'])} through Ollama." if pick else "No local model is ready."
+    models = [m for m in installed if om.is_chat(m)]
+    count = f"{len(models)} local model{'s' if len(models) != 1 else ''}"
+    if what == "current" or not models:
+        return Spoken(f"{using} You have {count} installed.")
+    names = [om.say_name(m["name"]) + ("" if om.has(m, "tools") else " (no tools)") for m in models[:8]]
+    more = f", and {len(models) - 8} more" if len(models) > 8 else ""
+    return Spoken(f"You have {count}: {', '.join(names)}{more}. {using} Say 'switch to' and a name to change.")
 
 
 @tool("Ask Claude (a more powerful cloud model) a hard question: deep reasoning, long explanations, "

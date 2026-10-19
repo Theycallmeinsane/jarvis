@@ -8,8 +8,8 @@ import threading
 import time
 from typing import Callable
 
-from .config import Section
-from .llm import ALIASES, LLMProvider, ToolResult, create_provider
+from .config import Section, save_local
+from .llm import ALIASES, PROVIDERS, LLMProvider, ToolResult, create_provider
 from .memory import Memory
 from .tools import ToolBox
 
@@ -56,8 +56,8 @@ class Agent:
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
             "memory": self.memory, "speak": speak, "switch_voice": switch_voice, "unduck": unduck,
-            "confirm": self.confirm})
-        self._pending_switch: str | None = None
+            "confirm": self.confirm, "brain": lambda: self.provider})
+        self._pending_switch: tuple[str, str | None] | None = None   # (provider, Ollama model) after this reply
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None
         self._last_activity = time.monotonic()
@@ -92,9 +92,14 @@ class Agent:
                                       address_rule=rule, today=dt.date.today().strftime("%A %d %B %Y"))
         return prompt + (self.memory.facts_prompt() if self.memory else "")
 
-    def _make(self, name: str) -> LLMProvider:
-        p = create_provider(name, self.cfg.llm, self._system_prompt(), self.toolbox.schemas())
-        problem = p.check()
+    def _make(self, name: str, model: str | None = None) -> LLMProvider:
+        if ALIASES.get(name.lower().strip(), name) not in PROVIDERS and not model:
+            model, problem = self._find_model(name)      # "--llm llama", "/model gemma": a local model by name
+            if not model:
+                raise ValueError(problem)
+            name = "ollama"
+        p = create_provider(name, self.cfg.llm, self._system_prompt(), self.toolbox.schemas(), model=model)
+        problem = p.check() or getattr(p, "note", None)   # e.g. the chosen model isn't pulled, using another
         if problem:
             log.warning(problem)
         if hasattr(p, "warm_up"):
@@ -117,19 +122,65 @@ class Agent:
             else:                  # mid-session: don't hold up the request that triggered it
                 threading.Thread(target=p.prime, daemon=True).start()
 
-    def switch(self, name: str) -> str:
+    def switch(self, name: str, model: str | None = None) -> str:
+        """Change brain now (tray, text mode, or after a reply). With `model`, that Ollama model is used and
+        remembered in config.local.yaml; a `name` that isn't a provider is taken as a model name too."""
         with self._lock:
             try:
-                self.provider = self._make(name)
+                self.provider = self._make(name, model)
             except Exception as e:
-                return f"I couldn't switch to {name}: {e}"
-            return f"Now using {self.provider.label}."
+                return f"I couldn't switch to {model or name}: {e}"
+            if self.provider.name == "ollama" and (model or name.lower().strip() not in ALIASES):
+                self._remember_model(self.provider.model)
+            note = getattr(self.provider, "note", None)
+            return f"Now using {self.provider.label}." + (f" {note}" if note else "")
 
-    def _request_switch(self, name: str) -> str:
-        key = ALIASES.get(name.lower(), name)
+    def _remember_model(self, model: str):
+        """Keep the local model the user picked for next time (and for looking at the screen)."""
+        providers = self.cfg.setdefault("llm", {}).setdefault("providers", {})
+        providers.setdefault("ollama", {})["model"] = model
+        try:
+            save_local({"llm": {"providers": {"ollama": {"model": model}}}})
+        except OSError as e:
+            log.warning("couldn't save the model choice: %s", e)
+
+    def _find_model(self, spoken: str) -> tuple[str | None, str]:
+        """The installed Ollama model a spoken name means ("llama", "gemma three"), or None and what to say."""
+        from .llm.ollama_models import OllamaUnavailable, fuzzy_pick, is_chat, list_models, ollama_url, say_name
+
+        try:
+            models = list_models(ollama_url(self.cfg))
+        except OllamaUnavailable as e:
+            return None, str(e)
+        pick = fuzzy_pick(models, spoken)
+        if pick:
+            return pick, ""
+        names = [say_name(m["name"]) for m in models if is_chat(m)]
+        if not names:
+            return None, "There are no Ollama models installed yet."
+        more = f" and {len(names) - 6} more" if len(names) > 6 else ""
+        return None, f"None of your Ollama models sounds like {spoken}. You have {', '.join(names[:6])}{more}."
+
+    def _request_switch(self, name: str, model: str = "") -> str:
+        """The switch_model tool: a brain ("claude", "local") or a local model ("llama"), after this reply."""
+        key = ALIASES.get((name or "").lower().strip(), name)
+        if model and ALIASES.get(model.lower().strip()) in PROVIDERS:   # model="claude"
+            key, model = ALIASES[model.lower().strip()], ""
+        if key in PROVIDERS and key != "ollama":
+            model = ""               # a model name only picks among the local (Ollama) ones
+        if model or key not in PROVIDERS:
+            from .llm.ollama_models import say_name
+
+            tag, problem = self._find_model(model or name)
+            if not tag:
+                return problem
+            if self.provider.name == "ollama" and self.provider.model == tag:
+                return f"Already using {say_name(tag)}."
+            self._pending_switch = ("ollama", tag)
+            return f"Switching to {say_name(tag)} after this reply."
         if key == self.provider.name:
             return f"Already using {self.provider.label}."
-        self._pending_switch = key
+        self._pending_switch = (key, None)
         return f"Switching to {key} after this reply."
 
     def _ask_claude(self, question: str) -> str:
@@ -179,8 +230,8 @@ class Agent:
             self._fresh_conversation(self.provider)
 
         if self._pending_switch:
-            name, self._pending_switch = self._pending_switch, None
-            note = self.switch(name)
+            (name, model), self._pending_switch = self._pending_switch, None
+            note = self.switch(name, model)
             emit(" " + note)
             reply = (reply + " " if reply else "") + note
         self._last_activity = time.monotonic()

@@ -74,11 +74,12 @@ if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
     }
 }
 if (Get-Command ollama -ErrorAction SilentlyContinue) {
-    $model = (& $vpy -c "from jarvis.hardware import detect, recommend; print(recommend(detect()).ollama_model)").Trim()
-    if (-not ((ollama list) -match [regex]::Escape($model))) {
+    # any model you already have that can use tools works; only pull the suggestion for this PC if there's none
+    $model = "$(& $vpy -c 'from jarvis.llm.ollama_models import model_to_pull; print(model_to_pull())')".Trim()
+    if ($model) {
         Write-Host "Downloading the $model model for this PC..."
         ollama pull $model
-    } else { Write-Host "$model is ready" }
+    } else { Write-Host "Using a model you already have (list them: .\jarvis.bat --models)" }
 }
 
 # ---------------------------------------------------------------- optional: GitHub by voice
