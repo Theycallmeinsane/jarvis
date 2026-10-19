@@ -484,7 +484,8 @@ def run_text_mode(cfg: Section, llm: str | None = None, tts: str | None = None, 
         return bool(YES.search(input("(yes/no) > ")))
 
     agent = Agent(cfg, notify=out, confirm=confirm, provider=llm, speak=out)
-    print(f"Text mode using {agent.provider.label}. Type 'quit' to exit, '/model claude' to switch brains.\n")
+    print(f"Text mode using {agent.provider.label}. Type 'quit' to exit, '/model claude' to switch brains "
+          "or '/model llama' to use another Ollama model.\n")
     while True:
         try:
             text = input("\033[93mYou:\033[0m ").strip()

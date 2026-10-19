@@ -6,16 +6,20 @@ from .base import LLMProvider, ToolCall, ToolResult, Turn
 PROVIDERS = ("ollama", "lmstudio", "openai_compat", "claude")
 
 ALIASES = {
-    "local": "ollama", "ollama": "ollama", "qwen": "ollama",
+    "local": "ollama", "ollama": "ollama",
     "lm studio": "lmstudio", "lmstudio": "lmstudio",
     "openai": "openai_compat", "openai_compat": "openai_compat", "groq": "openai_compat",
     "claude": "claude", "anthropic": "claude", "cloud": "claude",
 }
 
 
-def create_provider(name: str, llm_cfg: Section, system_prompt: str, tools: list[dict]) -> LLMProvider:
+def create_provider(name: str, llm_cfg: Section, system_prompt: str, tools: list[dict],
+                    model: str | None = None) -> LLMProvider:
+    """model: use this model instead of the configured one (e.g. an Ollama model picked by voice)."""
     name = ALIASES.get(name.lower().strip(), name)
     opts = dict((llm_cfg.get("providers") or {}).get(name) or {})
+    if model:
+        opts["model"] = model
     common = dict(system_prompt=system_prompt, tools=tools,
                   temperature=llm_cfg.get("temperature", 0.4),
                   max_history=llm_cfg.get("max_history_messages", 20))

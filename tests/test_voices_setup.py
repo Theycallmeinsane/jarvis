@@ -68,12 +68,17 @@ class WizardTests(unittest.TestCase):
     def test_non_interactive_run_writes_local_config_only(self):
         from jarvis import setup_wizard
 
+        installed = [{"name": "gemma3:4b", "size": 0, "params": "4.3B", "family": "gemma3",
+                      "capabilities": ["completion", "vision"]},
+                     {"name": "llama3.2:3b", "size": 0, "params": "3.2B", "family": "llama",
+                      "capabilities": ["completion", "tools"]}]
         with tempfile.TemporaryDirectory() as d:
             local = Path(d) / "config.local.yaml"
             hw = hardware.Hardware(None, 0, 16, 8)
             with mock.patch.object(setup_wizard, "detect", return_value=hw), \
                     mock.patch.object(setup_wizard, "save_local",
                                       side_effect=lambda s: __import__("jarvis.config").config.save_local(s, local)), \
+                    mock.patch.object(setup_wizard, "list_models", return_value=installed), \
                     mock.patch.object(setup_wizard, "cuda_onnx_available", return_value=False):
                 settings = setup_wizard.run_wizard(answers={"name": "Sam", "address": "boss", "voice": "amy",
                                                             "mic": "", "brain": "local", "shortcuts": "n",
@@ -82,7 +87,7 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(saved["assistant"], {"user_name": "Sam", "address": "boss"})
         self.assertEqual(saved["tts"]["voice"], "amy")
         self.assertEqual(saved["llm"]["provider"], "ollama")
-        self.assertEqual(saved["llm"]["providers"]["ollama"]["model"], "qwen3.5:2b")
+        self.assertEqual(saved["llm"]["providers"]["ollama"]["model"], "llama3.2:3b")   # installed + tools
         self.assertEqual(saved["stt"]["compute_type"], "int8")
         self.assertEqual(settings["tts"]["voice"], "amy")
 
@@ -103,8 +108,9 @@ class PerformanceTests(unittest.TestCase):
         fast, bal, qual = (hardware.performance_settings(p, hw) for p in ("fast", "balanced", "quality"))
         self.assertLess(fast["recording"]["silence_ms"], bal["recording"]["silence_ms"])
         self.assertLess(bal["recording"]["silence_ms"], qual["recording"]["silence_ms"])
-        self.assertEqual(fast["llm"]["providers"]["ollama"]["model"], "qwen3.5:2b")
-        self.assertEqual(bal["llm"]["providers"]["ollama"]["model"], "qwen3.5:4b")
+        self.assertNotIn("model", fast["llm"]["providers"]["ollama"])    # the brain model stays the user's pick
+        self.assertEqual(hardware.suggested_model("fast", hw), "qwen3.5:2b")
+        self.assertEqual(hardware.suggested_model("balanced", hw), "qwen3.5:4b")
         self.assertEqual(fast["stt"]["model"], "base.en")
         self.assertNotIn("tts", fast)                       # the voice isn't touched
         cpu = hardware.performance_settings("quality", hardware.Hardware(None, 0, 16, 8))

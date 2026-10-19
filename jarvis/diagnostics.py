@@ -106,7 +106,10 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
             raise RuntimeError(problem)
         p.add_user("Say ready.")
         turn = p.step()
-        return f"{p.label} replied: {turn.text.strip()[:40]!r}"
+        installed = getattr(p, "installed", None)    # Ollama: how many models there are to choose from
+        count = f" ({installed} model{'s' if installed != 1 else ''} installed, see --models)" if installed else ""
+        note = f"  NOTE: {p.note}" if getattr(p, "note", None) else ""
+        return f"{p.label}{count} replied: {turn.text.strip()[:40]!r}{note}"
 
     def runtime():
         from .hardware import onnxruntime_status

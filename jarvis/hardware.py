@@ -25,16 +25,16 @@ class Hardware:
 class Recommendation:
     whisper_model: str
     whisper_compute: str
-    ollama_model: str
+    ollama_model: str         # only a suggestion of what to pull: any installed model can be the brain
     voice: str
     onnxruntime: str          # "onnxruntime-gpu" or "onnxruntime"
     notes: list[str] = field(default_factory=list)
 
     def config(self) -> dict:
-        """The part of config.local.yaml these choices map to."""
+        """The part of config.local.yaml these choices map to (the brain model is left to the user:
+        setup lists what's installed, and llm.providers.ollama.model: auto picks the best one)."""
         return {
             "stt": {"model": self.whisper_model, "compute_type": self.whisper_compute},
-            "llm": {"providers": {"ollama": {"model": self.ollama_model}}},
             "tts": {"voice": self.voice},
         }
 
@@ -81,10 +81,17 @@ PERFORMANCE = ("fast", "balanced", "quality")
 SMALLER_BRAIN = {"qwen3.5:9b": "qwen3.5:4b", "qwen3.5:4b": "qwen3.5:2b", "qwen3.5:2b": "qwen3.5:0.8b"}
 
 
+def suggested_model(profile: str = "balanced", hw: Hardware | None = None) -> str:
+    """The qwen model worth pulling for a speed-vs-quality choice on this PC (a suggestion only)."""
+    model = recommend(hw or detect()).ollama_model
+    return SMALLER_BRAIN.get(model, model) if profile == "fast" else model
+
+
 def performance_settings(profile: str, hw: Hardware | None = None) -> dict:
     """Concrete settings for a speed-vs-quality choice on this hardware (written to config.local.yaml).
+    The brain model you picked is never changed here; suggested_model() says what would fit.
 
-    fast:     smaller Whisper + brain, shorter pause before Jarvis answers (may cut slow talkers off)
+    fast:     smaller Whisper, shorter pause before Jarvis answers (may cut slow talkers off)
     balanced: what setup recommends for the hardware
     quality:  bigger Whisper, a longer pause so you can think mid-sentence, more tool steps for the brain
     """
@@ -92,10 +99,9 @@ def performance_settings(profile: str, hw: Hardware | None = None) -> dict:
     rec = recommend(hw)
     s = rec.config()
     s["recording"] = {"silence_ms": 700}
-    s["llm"]["providers"]["ollama"]["max_tool_rounds"] = 1
+    s["llm"] = {"providers": {"ollama": {"max_tool_rounds": 1}}}
     if profile == "fast":
         s["stt"]["model"] = "base.en"
-        s["llm"]["providers"]["ollama"]["model"] = SMALLER_BRAIN.get(rec.ollama_model, rec.ollama_model)
         s["recording"]["silence_ms"] = 550
     elif profile == "quality":
         if hw.cuda and hw.vram_gb >= 7.5:

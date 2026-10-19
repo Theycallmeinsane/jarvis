@@ -233,6 +233,34 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     if plan:
         return plan
 
+    # ---- brain models: "which model are you using?", "what models do I have?", "switch to the llama model", "use gemma"
+    if has("list_models"):
+        if re.fullmatch(r"(?:which|what) (?:ai |language |local )?(?:model|brain|llm)(?: are you| am i| is| do you)?"
+                        r"(?: currently)? (?:using|running|on|use|loaded|in use|active)(?: now| right(?: now)?)?|"
+                        r"what(?:'s| is) (?:your|the) (?:current |active )?(?:ai |language |local )?(?:model|brain|llm)", t):
+            return [("list_models", {"what": "current"})]
+        if re.fullmatch(r"(?:what|which) (?:ai |language |local |ollama |other )?models (?:do i have|have i got|do you have|"
+                        r"are (?:installed|there|available)|can (?:i|you) use)(?: installed)?(?: on (?:ollama|this pc|"
+                        r"this computer|my pc|my computer))?|(?:list|show)(?: me)? (?:my |the |all )?(?:(?:installed|"
+                        r"available|local|ollama) )?models", t):
+            return [("list_models", {"what": "installed"})]
+    if has("switch_model"):
+        m = re.fullmatch(r"(?:switch|change|swap|go)(?: over| back)? to (?:the |a )?(?P<a>[\w .:-]+?) (?:model|brain|llm)|"
+                         r"(?:use|load|try|run) (?:the |a )?(?P<b>[\w .:-]+?) (?:model|brain|llm)(?: instead)?|"
+                         r"(?:switch|change|set) (?:the |your )?(?:model|brain|llm) to (?:the )?(?P<c>[\w .:-]+)", t)
+        name = m and (m.group("a") or m.group("b") or m.group("c"))
+        if not name:      # "use gemma", "switch to llama": only the name of a model Ollama has
+            from .llm.ollama_models import fuzzy_pick, known_models
+
+            m = re.fullmatch(r"(?:use|load|switch to|change to) (?:the )?(?P<n>[\w .:-]+?)(?: instead)?", t)
+            name = m.group("n") if m and fuzzy_pick(known_models(), m.group("n"), strict=True) else None
+        if name:
+            from .llm import ALIASES
+
+            if name in ALIASES:                 # "switch to the claude model", "use the local brain"
+                return [("switch_model", {"provider": name})]
+            return [("switch_model", {"provider": "local", "model": name})]
+
     # ---- desktop & windows
     if has("lock_computer") and re.fullmatch(r"lock (?:the |my )?(?:computer|pc|screen|laptop|windows)", t):
         return [("lock_computer", {})]

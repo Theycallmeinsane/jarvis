@@ -28,6 +28,32 @@ def grab_screen(max_side: int = 1600, all_screens: bool = False) -> bytes:
     return buf.getvalue()
 
 
+def vision_model(cfg: Section) -> tuple[str, list[str]]:
+    """The Ollama model to look with, and what it can do: vision.model if set, else the brain's model if it can
+    see, else any installed model that can. Raises ToolFailed (said to the user) when none can."""
+    from .llm.ollama_models import OllamaUnavailable, best_model, configured_model, find, has, list_models, ollama_url
+    from .tools.builtin import ToolFailed
+
+    wanted, brain = (cfg.get("vision") or {}).get("model"), configured_model(cfg)
+    try:
+        models = list_models(ollama_url(cfg))
+    except OllamaUnavailable:
+        return wanted or brain, []           # the request below says what's wrong
+    hit = find(models, wanted) if wanted else None
+    if hit:
+        return hit["name"], hit["capabilities"]
+    if wanted:
+        log.warning("vision.model %s isn't pulled; looking for another model that can see", wanted)
+    chat = best_model(models, brain)         # the brain's model ("auto" resolved the same way)
+    if chat and (has(chat, "vision", False) or not any(m["capabilities"] for m in models)):
+        return chat["name"], chat["capabilities"]   # (an Ollama too old to say: try the brain's model, as before)
+    seeing = best_model([m for m in models if has(m, "vision", False)])
+    if seeing:
+        return seeing["name"], seeing["capabilities"]
+    raise ToolFailed("None of your Ollama models can see images. Pull one that can, for example "
+                     "ollama pull qwen3.5:4b or ollama pull gemma3, or set vision provider to claude.")
+
+
 def describe(cfg: Section, image: bytes, question: str) -> str:
     v = cfg.get("vision") or {}
     provider = v.get("provider", "ollama")
@@ -36,12 +62,15 @@ def describe(cfg: Section, image: bytes, question: str) -> str:
 
     if provider == "ollama":
         o = (cfg.llm.get("providers") or {}).get("ollama") or {}
+        model, caps = vision_model(cfg)
         body = {
-            "model": v.get("model") or o.get("model", "qwen3.5:4b"),
+            "model": model,
             "messages": [{"role": "user", "content": prompt, "images": [b64]}],
-            "stream": False, "think": False, "keep_alive": o.get("keep_alive", "30m"),
+            "stream": False, "keep_alive": o.get("keep_alive", "30m"),
             "options": {"temperature": 0.2, "num_ctx": o.get("num_ctx", 8192)},
         }
+        if not caps or "thinking" in caps:     # only thinking models take the switch
+            body["think"] = False
         r = requests.post(f"{local_url(o.get('base_url', 'http://127.0.0.1:11434')).rstrip('/')}/api/chat", json=body, timeout=180)
         r.raise_for_status()
         return r.json()["message"]["content"].strip()

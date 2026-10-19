@@ -87,6 +87,8 @@ class TrayApp:
         self.llm, self.tts = llm, tts
         self.assistant = None
         self.state = "loading"
+        self._models: list[dict] = []          # installed Ollama models, for the "Ollama model" submenu
+        self._models_note = "Looking for models..."
         menu = pystray.Menu(
             pystray.MenuItem(lambda _: self._status_text(), None, enabled=False),
             pystray.Menu.SEPARATOR,
@@ -95,7 +97,9 @@ class TrayApp:
             pystray.MenuItem("Brain", pystray.Menu(*[
                 pystray.MenuItem(label, self._brain_setter(key), radio=True,
                                  checked=lambda _, k=key: self._brain() == k)
-                for label, key in self.BRAINS])),
+                for label, key in self.BRAINS],
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Ollama model", pystray.Menu(self._model_items)))),
             pystray.MenuItem("Lights (RGB)", pystray.Menu(*[
                 pystray.MenuItem(label, self._rgb_setter(action, value))
                 for label, action, value in LIGHT_PRESETS])),
@@ -158,6 +162,50 @@ class TrayApp:
                 self.icon.update_menu()
             threading.Thread(target=work, daemon=True).start()
         return set_brain
+
+    def _model(self) -> str | None:
+        p = self.assistant.agent.provider if self.assistant else None
+        return p.model if p is not None and p.name == "ollama" else None
+
+    def _model_items(self):
+        """The "Ollama model" submenu, rebuilt from the last list (pystray builds menus ahead of time on
+        Windows, so the list is fetched at start-up, after a switch, and with "Refresh list")."""
+        import pystray
+
+        from .llm.ollama_models import features
+
+        if not self._models:
+            yield pystray.MenuItem(self._models_note, None, enabled=False)
+        for m in self._models:
+            extra = ", ".join(x for x in (m["params"], features(m)) if x)
+            yield pystray.MenuItem(f"{m['name']} ({extra})" if extra else m["name"], self._model_setter(m["name"]),
+                                   radio=True, checked=lambda _, n=m["name"]: self._model() == n)
+        yield pystray.Menu.SEPARATOR
+        yield pystray.MenuItem("Refresh list", lambda *_: self._refresh_models())
+
+    def _refresh_models(self):
+        def work():
+            from .llm.ollama_models import OllamaUnavailable, is_chat, list_models, ollama_url
+
+            try:
+                self._models = [m for m in list_models(ollama_url(self.cfg)) if is_chat(m)]
+                self._models_note = "No models installed (ollama pull ...)"
+            except OllamaUnavailable:
+                self._models, self._models_note = [], "Ollama isn't running"
+            self.icon.update_menu()
+        threading.Thread(target=work, daemon=True).start()
+
+    def _model_setter(self, name: str):
+        def set_model(*_):
+            if not self.assistant:
+                return
+
+            def work():
+                msg = self.assistant.agent.switch("ollama", model=name)   # also saved for next time
+                self.icon.notify(msg[:250], "Jarvis")
+                self._refresh_models()
+            threading.Thread(target=work, daemon=True).start()
+        return set_model
 
     def _rgb_setter(self, action: str, value: str):
         def set_lights(*_):
@@ -229,6 +277,7 @@ class TrayApp:
         try:
             self.assistant = VoiceAssistant(self.cfg, self.llm, self.tts, on_state=self._on_state,
                                             on_announce=lambda m: self.icon.notify(m, "Jarvis"))
+            self._refresh_models()
             self.icon.notify('Say "Hey Jarvis".', "Jarvis is online")
             self.assistant.run()
         except Exception as e:

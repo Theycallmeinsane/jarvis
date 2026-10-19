@@ -11,6 +11,8 @@ from pathlib import Path
 
 from .config import ROOT, save_local
 from .hardware import describe, detect, onnxruntime_status, performance_settings, recommend
+from .llm.ollama_models import (OllamaUnavailable, features, find, fuzzy_pick, has, list_models, ollama_url,
+                                ranked)
 from .tts import VOICE_PRESETS, cuda_onnx_available
 
 
@@ -68,8 +70,38 @@ def create_shortcuts(desktop: bool = True, start_menu: bool = True) -> list[Path
     return made
 
 
+def _choose_model(suggested: str, answers: dict | None) -> str | None:
+    """Which Ollama model to use. The ones already installed come first (those that can use tools before the
+    rest); `suggested` (from hardware.py) is only what to pull when none of them fits.
+    Returns the model for config.local.yaml, or None to leave the setting as it is."""
+    from .config import load_config
+
+    try:
+        models = ranked(list_models(ollama_url(load_config())), suggested)
+    except OllamaUnavailable as e:
+        print(f"  {e} Jarvis will use the best model you have once it's running (choose: jarvis.bat --models).")
+        return None
+    if not models:
+        print(f"  No Ollama models yet. For this PC: ollama pull {suggested}  (Jarvis uses it, or any model you pull)")
+        return "auto"
+    print("\nYour Ollama models (Jarvis needs one that can use tools to act on the PC):")
+    for i, m in enumerate(models, 1):
+        print(f"  {i:>2}. {m['name']:<32} {m['params']:>7}  {features(m)}{'   <- recommended' if i == 1 else ''}")
+    if not has(models[0], "tools"):
+        print(f"  None of these can use tools, so Jarvis could only chat. For this PC: ollama pull {suggested}")
+    while True:
+        reply = _ask("Model (number or name)", models[0]["name"], answers, "model").strip()
+        if reply.isdigit() and 1 <= int(reply) <= len(models):
+            return models[int(reply) - 1]["name"]
+        hit = find(models, reply)
+        pick = hit["name"] if hit else fuzzy_pick(models, reply)
+        if pick or reply == "auto" or answers is not None:
+            return pick or reply
+        print("  not one of the models above")
+
+
 def run_wizard(answers: dict | None = None) -> dict:
-    """answers: pre-filled replies for a non-interactive run (keys: name, address, voice, mic, brain,
+    """answers: pre-filled replies for a non-interactive run (keys: name, address, voice, mic, brain, model,
     shortcuts, autostart). Returns the settings written to config.local.yaml."""
     print("\n=== Jarvis setup ===\n")
     hw = detect()
@@ -77,7 +109,8 @@ def run_wizard(answers: dict | None = None) -> dict:
     print(f"This PC: {describe(hw)}")
     ok, status = onnxruntime_status()
     print(f"Speech runtime: {status}")
-    print(f"Recommended: Whisper {rec.whisper_model}, brain {rec.ollama_model}, voice {rec.voice}")
+    print(f"Recommended: Whisper {rec.whisper_model}, voice {rec.voice}, brain: any Ollama model you have "
+          f"(or {rec.ollama_model})")
     for n in rec.notes:
         print(f"  - {n}")
     print("\nPress Enter to accept the suggestion in [brackets].\n")
@@ -128,6 +161,9 @@ def run_wizard(answers: dict | None = None) -> dict:
             print("  Put ANTHROPIC_API_KEY=... in the .env file in this folder (it's never committed).")
     else:
         settings["llm"]["provider"] = "ollama"
+        model = _choose_model(rec.ollama_model, answers)
+        if model:
+            settings["llm"]["providers"]["ollama"]["model"] = model
 
     path = save_local(settings)
     print(f"\nSaved your settings to {path.name}.")

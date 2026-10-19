@@ -65,7 +65,7 @@ class ProviderStreamTests(unittest.TestCase):
                  json.dumps({"message": {"content": "check."}}),
                  json.dumps({"message": {"tool_calls": [{"function": {"name": "get_datetime", "arguments": {}}}]}}),
                  json.dumps({"done": True, "message": {}})]
-        p = OllamaProvider(system_prompt="s", tools=[])
+        p = OllamaProvider(system_prompt="s", tools=[], model="qwen3.5:4b")
         got = []
         with mock.patch("jarvis.llm.ollama.requests.post", return_value=_FakeResponse(lines)):
             p.add_user("time?")

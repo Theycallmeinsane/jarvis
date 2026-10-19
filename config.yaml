@@ -61,8 +61,9 @@ llm:
   providers:
     ollama:
       base_url: http://127.0.0.1:11434   # 127.0.0.1, not localhost: avoids a 2 s IPv6 delay per request on Windows
-      model: qwen3.5:4b
-      think: false            # qwen3 "thinking" adds seconds of latency; off for voice
+      model: auto             # auto = the best model you have installed, or a tag: llama3.2:3b, gemma3:4b...
+                              # (jarvis.bat --models / --model NAME, the tray, or "switch to the llama model")
+      think: false            # thinking models (qwen3, deepseek-r1) add seconds of latency; off for voice
       keep_alive: 30m
       num_ctx: 8192
       max_tool_rounds: 1      # small models chain unrequested tools; raise to 2-3 for 8B+ models
@@ -147,8 +148,8 @@ files:                        # file access by voice (browse, read, create, rena
 
 vision:                       # "look at my screen" / "what does this error say?"
   enabled: true
-  provider: ollama            # ollama (qwen3.5 can see, stays local) | claude
-  model: null                 # null = the brain's model for that provider
+  provider: ollama            # ollama (a local model that can see: qwen3.5, gemma3, llava...) | claude
+  model: null                 # null = the brain's model if it can see, else any installed model that can
 
 routines:                     # your own multi-step workflows: "run good morning", "work mode", "movie mode"
                               # steps = any tool + its arguments, or "wait: <seconds>"

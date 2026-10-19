@@ -28,9 +28,10 @@ downloads). An NVIDIA GPU makes it faster but isn't required. Python and Ollama 
    powershell -ExecutionPolicy Bypass -File setup.ps1
    ```
 
-   It checks your hardware (GPU, VRAM, RAM), installs the right packages and a brain model that fits your PC,
-   asks a few optional questions (your name, how to address you, voice, microphone) and offers Desktop/Start
-   menu shortcuts. Add `-Yes` to accept every recommendation without questions.
+   It checks your hardware (GPU, VRAM, RAM), installs the right packages, lets you pick one of the Ollama models
+   you already have (or downloads one that fits your PC), asks a few optional questions (your name, how to
+   address you, voice, microphone) and offers Desktop/Start menu shortcuts. Add `-Yes` to accept every
+   recommendation without questions.
 3. **Start it** (activate the app): double-click the **Jarvis** shortcut, or run `.\jarvis-tray.bat`.
    An icon appears in the system tray (bottom-right, next to the clock). Wait for "Online and ready".
 4. **Talk**: say **"Hey Jarvis"** (or press **Ctrl+Alt+J**), wait for the chime, then e.g.
@@ -48,6 +49,10 @@ After pulling a new version, run `setup.ps1` again: it updates packages and keep
 | no NVIDIA GPU, 16 GB RAM | Whisper base.en on CPU, brain qwen3.5:2b, Piper voice |
 | no NVIDIA GPU, 8 GB RAM | Whisper base.en on CPU, brain qwen3.5:0.8b (consider `--llm claude`) |
 
+Already use Ollama? Any chat model you have works (llama, gemma, mistral, deepseek, phi, qwen…): setup lists
+them and the brain above is only downloaded when none of yours can use tools. See
+[Choosing the local model](#choosing-the-local-model).
+
 Other ways to run it:
 
 ```powershell
@@ -56,6 +61,8 @@ Other ways to run it:
 .\jarvis.bat --text              # type instead of talk (good for testing)
 .\jarvis.bat --text --speak      # type, but hear the replies
 .\jarvis.bat --llm claude        # use Claude for this run
+.\jarvis.bat --models            # list your Ollama models and which one Jarvis uses
+.\jarvis.bat --model llama       # use another installed Ollama model from now on (part of the name is enough)
 .\jarvis.bat --voice jarvis      # pick a voice for this run (see "Voices")
 .\jarvis.bat --list-devices      # find your mic's index / name
 .\jarvis.bat --check             # test every component
@@ -88,7 +95,8 @@ First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (1
 
 `jarvis-tray.bat` runs Jarvis with no console window. The tray icon's ring changes colour with the state
 (blue idle, green listening, amber thinking, cyan speaking, grey paused). Right-click for:
-pause listening, stop talking, switch brain (Local / Claude / LM Studio / OpenAI-compatible),
+pause listening, stop talking, switch brain (Local / Claude / LM Studio / OpenAI-compatible) and pick the
+local model (**Brain → Ollama model**),
 **Start with Windows** (adds a per-user startup entry, no admin needed), open settings / notes / log, quit.
 Logs go to `data/jarvis.log`.
 
@@ -102,7 +110,7 @@ Logs go to `data/jarvis.log`.
 | "Open github.com" | `open_website` |
 | "Who is Ada Lovelace?" | `wikipedia_summary` |
 | "What's the latest Python version?", "any tech news today?" | `web_lookup` (DuckDuckGo results read back, no browser) |
-| "What does this error on my screen say?", "what's open?" | `look_at_screen` (local qwen3.5 vision, or Claude) |
+| "What does this error on my screen say?", "what's open?" | `look_at_screen` (a local Ollama model that can see, or Claude) |
 | "What's the weather in Paris?" | `get_weather` (wttr.in) |
 | "Volume to 30", "mute", "louder" | `volume` (the whole PC) |
 | "Turn Spotify up", "increase the volume on Spotify", "mute Discord" | `app_volume` (one app) |
@@ -144,6 +152,7 @@ Logs go to `data/jarvis.log`.
 | "Email Sara that I'll be late" | `gmail_find_address` → `gmail_send` (reads it back, asks first) / `gmail_draft` |
 | "Remember that…" / "what do you know about me?" / "forget…" | `remember` / `list_memories` / `forget` |
 | "Switch to Claude" / "go back to local" | `switch_model` |
+| "Switch to the llama model", "use gemma" / "which model are you using?", "what models do I have?" | `switch_model` / `list_models` (any Ollama model you have) |
 | "Ask Claude to explain quantum tunnelling" | `claude_chat` (claude.ai in Chrome; answer read back) or `ask_claude` (API key) |
 | "What tabs do I have open?", "switch to the YouTube tab", "close this tab" | `chrome_tabs` / `chrome_tab` |
 | "Summarize this page", "click sign in", "type hello in the search box" | `chrome_read` / `chrome_click` / `chrome_type` |
@@ -321,7 +330,7 @@ Lighting steps work in routines too, e.g. `- rgb: {action: color, value: dim blu
 
 | provider | what | setup |
 |---|---|---|
-| `ollama` (default) | local models via Ollama | `ollama pull qwen3.5:4b` |
+| `ollama` (default) | local models via Ollama | any model you've pulled (or `ollama pull qwen3.5:4b`) |
 | `lmstudio` | LM Studio's local server | Developer tab → Start server, set `model` |
 | `openai_compat` | llama.cpp server, vLLM, Groq, OpenRouter, OpenAI… | set `base_url`, `model`, key in `.env` |
 | `claude` | Anthropic Claude | `ANTHROPIC_API_KEY` in `.env` |
@@ -337,6 +346,30 @@ llm: {provider: claude}
 tts: {provider: kokoro}
 audio: {input_device: HyperX}
 ```
+
+### Choosing the local model
+
+Jarvis works with any chat model you have in Ollama (llama, gemma, mistral, deepseek, phi, qwen…).
+`llm.providers.ollama.model` is `auto` by default: the model you picked, or else the best one installed (one
+that can use tools, around 4B so answers stay quick). Embedding-only models are skipped. To pick one:
+
+* **Setup** (`.\jarvis.bat --setup`) lists your installed models, the recommended one first, and takes a number
+  or a name.
+* **Command line:** `.\jarvis.bat --models` lists them with their size and what each can do (tools, vision,
+  thinking) and marks the one in use; `.\jarvis.bat --model llama` saves your choice in `config.local.yaml`
+  (part of the name is enough; `--model auto` goes back to automatic).
+* **Tray:** right-click → **Brain → Ollama model** switches right away and remembers it (**Refresh list** after
+  pulling a new model).
+* **Voice:** *"switch to the llama model"*, *"use gemma"*, *"which model are you using?"*, *"what models do I
+  have?"*. Names are matched loosely, so *"gemma three"*, *"deep seek"* or a misheard *"quen 3"* work; when no
+  model sounds close, Jarvis lists the ones you have instead of guessing. In text mode: `/model llama`.
+
+If the chosen model isn't pulled any more, Jarvis uses the best installed one and says so in the log and in
+`--check`; `ollama pull` is only suggested when nothing usable is installed. Models without tool calling (e.g.
+`gemma3`) can still chat and the quick commands (volume, media, timers…) still work, but they can't run other
+actions. *"Look at my screen"* uses `vision.model` if set, else the brain's model if it can see, else any
+installed model that can (`gemma3`, `qwen3.5`, `llava`…). The `think` switch is only sent to models that have one
+(qwen3, deepseek-r1…).
 
 ## Voices
 
@@ -391,7 +424,8 @@ Windows 11 Pro, i5-12600K, 16 GB RAM, RTX 3050 8 GB, Ollama `qwen3.5:4b` fully o
 | LLM, plain chat answer | ~3 s |
 | Piper voice | ~0.1 s to synthesize a 4 s sentence (CPU) |
 
-`qwen3:4b` was much slower here (9–28 s) because it ignores the "no thinking" switch, so `qwen3.5:4b` is the default.
+`qwen3:4b` was much slower here (9–28 s) because it ignores the "no thinking" switch, so `qwen3.5:4b` is what
+setup suggests.
 
 ## Project layout
 
@@ -410,7 +444,8 @@ jarvis/
   recorder.py      webrtcvad endpointing
   stt.py           faster-whisper (CUDA → CPU fallback)
   tts.py           Piper / Kokoro / SAPI
-  llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
+  llm/             ollama.py, ollama_models.py (installed models, picking one by name), openai_compat.py
+                   (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
