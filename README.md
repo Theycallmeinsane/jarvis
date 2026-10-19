@@ -148,6 +148,9 @@ Logs go to `data/jarvis.log`.
 | "What tabs do I have open?", "switch to the YouTube tab", "close this tab" | `chrome_tabs` / `chrome_tab` |
 | "Summarize this page", "click sign in", "type hello in the search box" | `chrome_read` / `chrome_click` / `chrome_type` |
 | "Skip 30 seconds", "play the video at 1.5 speed", "scroll down" | `chrome_video` / `chrome_page` |
+| "Open Instagram reels", "like this post", "next post", "DM Sara saying hi" (asks first) | `social` (Instagram, Facebook) |
+| "Show links" then "click 7", "open the second result", "find pricing on this page" | `chrome_links` / `chrome_results` / `chrome_find` |
+| "Search for lofi beats on YouTube", "search Daraz for headphones", "surprise me" | `site_search` / `random_site` |
 | "Run `Get-Process` in PowerShell" | `run_powershell` (off by default, asks first) |
 
 ### Routines (multi-step workflows, no code)
@@ -269,6 +272,43 @@ whenever both are running. It only talks to Jarvis on this PC, and Jarvis only a
 * *"Ask Claude …"* sends it to claude.ai (you need to be signed in there), waits for the answer and reads it
   out; long answers are summarized as their opening with the rest on screen. *"Read Claude's answer"*,
   *"stop Claude"*, *"open Claude"* too.
+
+### Surfing by voice
+
+* *"Show links"* puts a number on every link and button you can see; *"click 7"* (or *"press seven"*) clicks it.
+  *"Hide the numbers"* takes them away (scrolling does too).
+* On Google, YouTube, Bing, DuckDuckGo, Amazon, Reddit, Wikipedia or GitHub results: *"read the results"*,
+  *"open the second result"*, *"open the last result"*.
+* *"Search for lofi beats on YouTube"*, *"search Amazon for a USB-C cable"*, *"YouTube search Coke Studio"*:
+  Google (Images, News, Maps), YouTube, Amazon, Daraz, eBay, AliExpress, Reddit, Wikipedia, GitHub,
+  Stack Overflow, X, Instagram, Facebook, LinkedIn, TikTok, Pinterest, Quora, IMDb, Spotify, Netflix, Bing,
+  DuckDuckGo, ChatGPT, Perplexity.
+* *"Find pricing on this page"* jumps to the words. *"Open a random website"*, *"surprise me"*, *"open a random
+  Wikipedia article"*, *"open a random game"* or *"comic"* open something interesting (well-known sites only).
+
+### Instagram and Facebook
+
+Sign in to them in Chrome once; Jarvis acts on the tab that's open.
+
+* *"Open Instagram reels / explore / messages / notifications / stories"*, *"open Facebook marketplace / watch /
+  groups / friends / memories"*, *"open nasa on Instagram"*, *"search Instagram for #sunset"*.
+* The post, reel or story in view: *"like this post"*, *"save this post"*, *"read this post"*, *"next post"*,
+  *"previous reel"*, *"next story"*, *"pause the story"*. Add *"on Instagram"* or *"on Facebook"* when both are
+  open (*"like this video on Facebook"*, *"play the reel on Instagram"*).
+* Chats: *"open my chat with Ahmed"* (a misheard name still finds *Ahmad Khan*), *"read this chat"*,
+  *"send a message saying see you at 5"*, *"DM Sara saying running late"*.
+* *"Comment saying great shot"*, *"follow this account"*, *"unfollow this account"*.
+
+Anything that speaks for you (a message, a comment, a follow) is read back and only happens after a spoken
+*yes*. Jarvis only does what you ask, one action at a time; it never posts on its own.
+
+### Misheard names
+
+Whisper sometimes hears *"insta gram"*, *"red it"*, *"you tube"* or *"Ahmed"* for *"Ahmad"*. Site names, chat
+names, app names, window titles, tabs, routines and GitHub repos are matched by spelling, spacing and a rough
+sound-alike key, so these still land in the right place, and a name that matches nothing well is refused
+rather than guessed. Names you add to `stt.hints` in `config.yaml` (e.g. your friends' names or favourite
+artists) are also used to correct search queries: *"search YouTube for jo gee"* searches for *Joji*.
 
 Clicking anything like *buy*, *pay*, *send*, *delete* or *submit* asks first, and Jarvis never types into
 password or card fields. Without the extension, *new tab*, *close this tab*, *next tab*, *go back*, *reload*
@@ -413,8 +453,10 @@ jarvis/
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
-                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
+                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude),
+                   web.py (numbered links, results, site search, random sites), social.py (Instagram, Facebook)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
+  fuzzy.py         forgiving matching for misheard names (spacing, sound-alikes, number words)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
 scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)
   diagnostics.py   --check

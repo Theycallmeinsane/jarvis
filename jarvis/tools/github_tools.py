@@ -15,7 +15,6 @@ config.yaml / config.local.yaml:
 from __future__ import annotations
 
 import calendar
-import difflib
 import json
 import logging
 import os
@@ -25,6 +24,7 @@ import subprocess
 import threading
 import time
 
+from .. import fuzzy
 from .registry import Spoken, tool
 
 log = logging.getLogger(__name__)
@@ -145,9 +145,9 @@ def resolve_repo(cfg, repo: str = "") -> str:
     key = _spoken(repo)
     if key in by_name:
         return by_name[key]
-    close = difflib.get_close_matches(key, list(by_name), n=1, cutoff=0.6)
-    if close:
-        return by_name[close[0]]
+    hit = fuzzy.best(key, list(by_name), cutoff=0.75)         # "jar vis", "resume screen er"
+    if hit:
+        return by_name[hit]
     try:
         return f"{_me()}/{repo.replace(' ', '-')}"
     except GitHubError:

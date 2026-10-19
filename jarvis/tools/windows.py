@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.wintypes as wt
-import difflib
 import os
 import re
 import subprocess
 import time
 
+from .. import fuzzy
 from .registry import tool
 
 NO_WINDOW = 0x08000000
@@ -123,9 +123,7 @@ def find_window(name: str) -> tuple[int, str] | None:
     for hwnd, title in wins:
         if q.replace(" ", "") in _process_name(hwnd).replace(" ", ""):
             return hwnd, title
-    titles = [t.lower() for _, t in wins]
-    close = difflib.get_close_matches(q, titles, n=1, cutoff=0.5)
-    return next(((h, t) for h, t in wins if t.lower() == close[0]), None) if close else None
+    return fuzzy.best(q, wins, key=lambda w: w[1], cutoff=0.7)        # "v s code", "note pad", "spot if i"
 
 
 def _focus(hwnd: int):
