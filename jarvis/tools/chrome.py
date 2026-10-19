@@ -297,8 +297,9 @@ def _youtube(action: str, ctx):
     r = _call(ctx, "run", {"fn": "youtube", "args": {"action": action}})
     if not r.get("ok"):
         host = r.get("host", "")
-        if action in ("like", "unlike") and re.search(r"instagram\.com|facebook\.com", host):
-            from .social import social                 # "like this video" on a reel
+        if action in ("like", "unlike") and re.search(r"instagram\.com|facebook\.com|reddit\.com|(^|\.)x\.com|"
+                                                      r"twitter\.com", host):
+            from .social import social                 # "like this video" on a reel, a Reddit post or X
 
             return social(action, ctx=ctx)
         raise ToolFailed(f"I couldn't: {r.get('reason')}.")

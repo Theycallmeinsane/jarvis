@@ -149,6 +149,7 @@ Logs go to `data/jarvis.log`.
 | "Summarize this page", "click sign in", "type hello in the search box" | `chrome_read` / `chrome_click` / `chrome_type` |
 | "Skip 30 seconds", "play the video at 1.5 speed", "scroll down" | `chrome_video` / `chrome_page` |
 | "Open Instagram reels", "like this post", "next post", "DM Sara saying hi" (asks first) | `social` (Instagram, Facebook) |
+| "Who messaged me on WhatsApp?", "WhatsApp Sara saying running late" (asks first), "upvote this", "open r slash python", "next tweet", "repost this" (asks first) | `social` (WhatsApp Web, Reddit, X) |
 | "Show links" then "click 7", "open the second result", "find pricing on this page" | `chrome_links` / `chrome_results` / `chrome_find` |
 | "Search for lofi beats on YouTube", "search Daraz for headphones", "surprise me" | `site_search` / `random_site` |
 | "Skip the ad", "turn on captions", "like this video", "subscribe" (asks first) | `chrome_video` (YouTube) |
@@ -306,9 +307,10 @@ whenever both are running. It only talks to Jarvis on this PC, and Jarvis only a
 After pulling a new version of Jarvis, press the reload arrow on Jarvis Control in `chrome://extensions` once so
 Chrome runs the new extension (Jarvis tells you if it's still on the old one).
 
-### Instagram and Facebook
+### Instagram, Facebook, WhatsApp, Reddit and X
 
-Sign in to them in Chrome once; Jarvis acts on the tab that's open.
+Sign in to them in Chrome once; Jarvis acts on the tab that's open. When you don't name the site, it uses the
+social tab in front, or the open one that can do what you asked (*"upvote this"* finds your Reddit tab).
 
 * *"Open Instagram reels / explore / messages / notifications / stories"*, *"open Facebook marketplace / watch /
   groups / friends / memories"*, *"open nasa on Instagram"*, *"search Instagram for #sunset"*.
@@ -319,8 +321,28 @@ Sign in to them in Chrome once; Jarvis acts on the tab that's open.
   *"send a message saying see you at 5"*, *"DM Sara saying running late"*.
 * *"Comment saying great shot"*, *"follow this account"*, *"unfollow this account"*.
 
-Anything that speaks for you (a message, a comment, a follow) is read back and only happens after a spoken
-*yes*. Jarvis only does what you ask, one action at a time; it never posts on its own.
+**WhatsApp Web** (*"open WhatsApp web"*; a bare *"open WhatsApp"* still starts the desktop app if you have it):
+
+* *"Who messaged me on WhatsApp?"*, *"any new WhatsApp messages?"*, *"check my WhatsApp"*: the chats with new
+  messages and how many, newest first.
+* *"Open my chat with Ahmed on WhatsApp"*, *"open Sara on WhatsApp"*: picks the closest name in your chat list,
+  or searches WhatsApp for it when it isn't on screen.
+* *"Read my WhatsApp messages"* / *"read this chat"*: the last few messages and who sent each.
+* *"WhatsApp Sara saying running late"*, *"send a WhatsApp to Ahmed saying see you at 5"*, or *"reply saying on
+  my way"* in the open chat. Jarvis never calls, deletes, blocks or changes settings.
+
+**Reddit**: *"open r slash python"*, *"open the python subreddit"*, *"open python on Reddit"*, *"open popular on
+Reddit"*; the post in view: *"read this post"*, *"upvote this"* (or *"like this post on Reddit"*),
+*"downvote this"*, *"remove my vote"*, *"save this post"*, *"next post"*, *"previous post"*. No commenting or
+posting.
+
+**X (Twitter)**: *"open Twitter notifications"*, *"open my X bookmarks"*, *"open my X profile"*, *"open elon musk
+on Twitter"*, *"search Twitter for SpaceX"*; the post in view: *"read this tweet"*, *"like this tweet"*,
+*"bookmark this tweet"*, *"next tweet"*, *"previous tweet"*, *"repost this"*. No replying or posting.
+
+Anything that speaks for you (a message, a comment, a follow, a repost) is read back and only happens after a
+spoken *yes*, and only on the tab you're looking at or the site you named. Jarvis only does what you ask, one
+action at a time; it never posts on its own.
 
 ### Misheard names
 
@@ -474,8 +496,8 @@ jarvis/
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
                    memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude),
-                   web.py (numbered links, results, site search, random sites), social.py (Instagram, Facebook),
-                   browse.py (bookmarks, history, auto-scroll, this site's search)
+                   web.py (numbered links, results, site search, random sites), social.py (Instagram, Facebook,
+                   WhatsApp Web, Reddit, X), browse.py (bookmarks, history, auto-scroll, this site's search)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
   fuzzy.py         forgiving matching for misheard names (spacing, sound-alikes, number words)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
