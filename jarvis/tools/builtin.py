@@ -286,7 +286,8 @@ def play_song(song: str):
       {"app": {"type": "string", "description": "App name, or 'music' for the app that's playing"},
        "action": {"type": "string", "enum": ["get", "set", "up", "down", "mute", "unmute"]},
        "percent": {"type": "integer", "description": "0-100 for 'set'; step for up/down (default 15)"}},
-      required=["app", "action"], triggers=("volume", "louder", "quieter", "mute", "loud", "quiet", "sound", "turn"))
+      required=["app", "action"], triggers=("volume", "louder", "quieter", "mute", "loud", "quiet", "sound", "turn",
+                                            "percent"))
 def app_volume(app: str, action: str, percent: int | None = None, ctx=None):
     from .. import appvolume
 
@@ -475,7 +476,9 @@ def type_text(text: str):
 
 # ---------------------------------------------------------------- screen & power
 
-@tool("Take a screenshot and save it to Pictures/Jarvis.", triggers=("screenshot", "screen shot", "capture", "snap"))
+@tool("Take a screenshot and save it to Pictures/Jarvis.",
+      triggers=("screenshot", "screenshoot", "screen shot", "screen shoot", "screen grab", "capture", "snap",
+                "picture of"))
 def take_screenshot(ctx=None):
     from PIL import ImageGrab
 
@@ -506,7 +509,8 @@ def lock_computer():
 
 @tool("Shut down, restart or put the computer to sleep.",
       {"action": {"type": "string", "enum": ["shutdown", "restart", "sleep", "cancel"]}}, dangerous=True,
-      triggers=("shut", "restart", "reboot", "sleep", "power", "turn off", "cancel"))
+      triggers=("shut", "restart", "reboot", "sleep", "power", "turn off", "computer off", "pc off", "laptop off",
+                "cancel"))
 def power(action: str):
     if action == "sleep":
         subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])

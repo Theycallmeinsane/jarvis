@@ -2,8 +2,11 @@
 so switching brains is just swapping one object for another."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -50,6 +53,13 @@ class LLMProvider:
         """Change the tools offered from the next step on (a local brain gets only the ones that fit the request)."""
         self.tools = tools
         self._tool_defs = self.tool_defs(tools)
+
+    def warn_if_full(self, prompt_tokens: int | None):
+        """A prompt that fills the context window was cut at the start (Jarvis's instructions go first): say so."""
+        num_ctx = getattr(self, "num_ctx", 0) or 0
+        if isinstance(prompt_tokens, int) and num_ctx and prompt_tokens >= 0.95 * num_ctx:
+            log.warning("the prompt filled the %d-token context (%d tokens): the model may have lost its "
+                        "instructions; raise num_ctx or lower llm.max_tools", num_ctx, prompt_tokens)
 
     def tool_defs(self, tools: list[dict]) -> list[dict]:
         return [{"type": "function", "function": t} for t in tools]

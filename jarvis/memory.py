@@ -1,6 +1,7 @@
 """Persistent memory that survives restarts.
 
-* facts   (data/memory.json)    - things the user asked Jarvis to remember; injected into the system prompt
+* facts   (data/memory.json)    - things the user asked Jarvis to remember; the ones a request is about are
+                                  attached to it as a short note for the brain
 * history (data/history.jsonl)  - every exchange (user text + spoken reply); the last few are replayed
                                   into a fresh conversation so Jarvis picks up where it left off
 """
@@ -14,8 +15,17 @@ import time
 from pathlib import Path
 
 from .config import Section, resolve_path
+from .wordmatch import alike, content_words, tokens
 
 log = logging.getLogger(__name__)
+
+# "what do you know about me", "what have I told you": every fact, not just the matching ones
+ASK_ALL = re.compile(r"\b(know|remember|remembered|saved|stored|kept|have|got) (on|about|of) (me|myself)\b|"
+                     r"\bwhat have i told you\b|\btell me about (me|myself)\b|\byour memor(y|ies)\b|"
+                     r"\b(do|did) you remember (anything|everything)\b|\bwhat (do|did|have) you (remember|remembered)$")
+# words too common in facts to tie a request to one ("favourite", "name", "called")
+FACT_STOP = {"favourite", "favorite", "like", "likes", "love", "loves", "name", "named", "called", "call",
+             "remember", "forget", "know", "told", "really", "today", "always", "usually"}
 
 
 class Memory:
@@ -27,6 +37,8 @@ class Memory:
         self.restore_turns = int(m.get("restore_turns", 2))
         self.restore_minutes = float(m.get("restore_within_minutes", 30))
         self.max_facts = int(m.get("max_facts", 100))
+        self.relevant_facts_max = int(m.get("facts_per_request", 5))     # facts attached to one request
+        self.all_facts = int(m.get("facts_when_asked", 20))              # ...when asked "what do you know about me"
         self._lock = threading.Lock()
         self.facts: list[dict] = self._load_facts()
 
@@ -72,13 +84,38 @@ class Memory:
                 self._save_facts()
         return f"Forgotten {removed} item{'s' * (removed != 1)}." if removed else f"I had nothing about {query}."
 
-    def facts_prompt(self) -> str:
-        if not self.facts:
-            return ""
-        lines = "\n".join(f"- {f['fact']}" for f in self.facts)
-        return (f"\n\nThings the user asked you to remember (from earlier sessions). Use one only when it matters "
-                f"to what they ask now; never bring them up otherwise, and don't claim to know anything else about "
-                f"them:\n{lines}")
+    # Facts used to sit in the system prompt, all of them, for every request: a small model then mentioned them
+    # out of the blue, and every new fact changed the prompt (so Ollama couldn't reuse its cached start). Now the
+    # system prompt only carries this fixed rule, and each request gets just the facts that are about it.
+    RULE = ("\n\nA user message may end with a [Memory: ...] note: things the user asked you to remember in earlier "
+            "sessions. Use one only when it matters to what they ask now; never bring them up otherwise, and don't "
+            "claim to know anything else about them.")
+
+    def facts_rule(self) -> str:
+        return self.RULE
+
+    def relevant_facts(self, request: str) -> list[str]:
+        """The remembered facts this request is about ("where did I park" -> "car is parked on level 2"), best
+        first; all of them (newest first, capped) when the user asks what Jarvis knows about them."""
+        with self._lock:
+            facts = [f["fact"] for f in self.facts]
+        if not facts:
+            return []
+        if ASK_ALL.search(" ".join(tokens(request))):
+            return facts[::-1][:self.all_facts]
+        said = [w for w in content_words(request) if len(w) >= 3 and w not in FACT_STOP]
+        scored = []
+        for age, fact in enumerate(reversed(facts)):           # age 0 = newest
+            words = [w for w in content_words(fact) if len(w) >= 3 and w not in FACT_STOP]
+            hits = sum(1 for s in said if any(alike(s, w) for w in words))
+            if hits:
+                scored.append((-hits, age, fact))
+        return [fact for *_, fact in sorted(scored)[:self.relevant_facts_max]]
+
+    def facts_note(self, request: str) -> str:
+        """A short note to append to the user's message for the brain (never logged as what the user said)."""
+        facts = self.relevant_facts(request)
+        return f"\n\n[Memory: {'; '.join(facts)}]" if facts else ""
 
     # ------------------------------------------------------------ history
 

@@ -25,7 +25,7 @@ class MemoryTests(unittest.TestCase):
             m = Memory(cfg)
             m.remember("his sister is called Sara.")
             self.assertIn("already", m.remember("His sister is called Sara"))
-            self.assertIn("Sara", Memory(cfg).facts_prompt())          # survives a restart
+            self.assertIn("Sara", Memory(cfg).facts_note("what's my sister called"))   # survives a restart
             self.assertIn("Forgotten 1", Memory(cfg).forget("sara"))
             self.assertEqual(Memory(cfg).facts, [])
 

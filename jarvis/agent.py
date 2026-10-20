@@ -90,7 +90,8 @@ class Agent:
                 else "Speak to the user naturally, without titles like sir or madam.")
         prompt = SYSTEM_PROMPT.format(name=a.get("name") or "Jarvis", user=a.get("user_name") or "the user",
                                       address_rule=rule, today=dt.date.today().strftime("%A %d %B %Y"))
-        return prompt + (self.memory.facts_prompt() if self.memory else "")
+        # the facts themselves go with each request (only the ones it's about), so this stays the same
+        return prompt + (self.memory.facts_rule() if self.memory else "")
 
     def _local(self, p: LLMProvider) -> bool:
         """A brain with a small context window, which gets only the tools that fit each request."""
@@ -111,7 +112,7 @@ class Agent:
         return p
 
     def _fresh_conversation(self, p: LLMProvider, prime_now: bool = False):
-        """New conversation: current date + remembered facts. After a restart (prime_now) the last couple of
+        """New conversation: current date and the memory rule. After a restart (prime_now) the last couple of
         exchanges are replayed too; after an idle gap or an error the slate is clean, so nothing stale is repeated.
         (The system prompt only changes here, never mid-conversation, so histories stay append-only.)"""
         p.reset()
@@ -214,7 +215,8 @@ class Agent:
 
     def _run(self, text: str, on_text: Callable[[str], None] | None = None) -> str:
         p = self.provider
-        p.add_user(text)
+        # remembered facts this request is about ride along as a note; the history log keeps only the user's words
+        p.add_user(text + (self.memory.facts_note(text) if self.memory else ""))
         self._request = text
         self.toolbox.context["request"] = text
         self._offer_tools(p, text)

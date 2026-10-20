@@ -136,7 +136,7 @@ class AgentTests(unittest.TestCase):
         cfg["memory"] = {"facts_file": os.path.join(d, "m.json"), "history_file": os.path.join(d, "h.jsonl")}
         mem = Memory(cfg)
         mem.remember("favourite colour is blue")
-        self.assertIn("never bring them up otherwise", mem.facts_prompt())
+        self.assertIn("never bring them up otherwise", mem.facts_rule())
         self.assertEqual(mem.forget("my favourite colour"), "Forgotten 1 item.")
         with open(os.path.join(d, "m.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f), [])
@@ -144,6 +144,105 @@ class AgentTests(unittest.TestCase):
     def test_no_example_values_in_remember(self):
         schema = ToolBox(load_config(), {}).get("remember").schema()
         self.assertNotIn("colour", json.dumps(schema).lower())
+
+
+def memory_in(d) -> Memory:
+    cfg = load_config()
+    cfg["memory"] = {"facts_file": os.path.join(d, "m.json"), "history_file": os.path.join(d, "h.jsonl")}
+    return Memory(cfg)
+
+
+class FactRetrievalTests(unittest.TestCase):
+    """Only the remembered facts a request is about reach the brain, as a note on that request."""
+
+    def setUp(self):
+        self.mem = memory_in(tempfile.mkdtemp())
+        for fact in ("car is parked on level 2", "favourite colour is blue", "sister is called Sara",
+                     "allergic to peanuts", "the wifi password is fish"):
+            self.mem.remember(fact)
+
+    def test_a_request_finds_the_facts_it_is_about(self):
+        self.assertEqual(self.mem.relevant_facts("where did I park"), ["car is parked on level 2"])
+        self.assertEqual(self.mem.relevant_facts("what's my sister's name"), ["sister is called Sara"])
+        self.assertEqual(self.mem.relevant_facts("can I eat this peanut butter"), ["allergic to peanuts"])
+        self.assertEqual(self.mem.relevant_facts("what's the wi-fi password"), ["the wifi password is fish"])
+
+    def test_misheard_and_other_spellings(self):
+        self.assertEqual(self.mem.relevant_facts("what's my favorite color"), ["favourite colour is blue"])
+
+    def test_unrelated_requests_get_no_facts(self):
+        for request in ("tell me a joke", "what time is it", "what's your favourite movie", "how are you",
+                        "what do you know about black holes", "what's using my memory"):
+            self.assertEqual(self.mem.facts_note(request), "", request)
+
+    def test_asking_what_jarvis_knows_gets_them_all_capped(self):
+        everything = self.mem.relevant_facts("what do you know about me")
+        self.assertEqual(len(everything), 5)
+        self.assertEqual(everything[0], "the wifi password is fish")          # newest first
+        self.assertEqual(len(self.mem.relevant_facts("what do you remember about me")), 5)
+        for i in range(30):
+            self.mem.remember(f"fact number {i}")
+        self.assertEqual(len(self.mem.relevant_facts("what have I told you")), 20)
+
+    def test_note_goes_to_the_brain_but_the_log_keeps_the_users_words(self):
+        p = Recorder([Turn(text="On level 2.")])
+        agent = agent_with(p, self.mem)
+        agent.cfg["router"] = {"enabled": False}
+        before = agent._system_prompt()
+        agent.handle("where did I park")
+        self.assertEqual(p.messages[0]["content"], "where did I park\n\n[Memory: car is parked on level 2]")
+        with open(self.mem.history_path, encoding="utf-8") as f:
+            self.assertEqual(json.loads(f.readlines()[-1])["user"], "where did I park")
+        self.assertNotIn("level 2", before)                    # facts never sit in the system prompt...
+        self.mem.remember("dentist on friday")
+        self.assertEqual(agent._system_prompt(), before)        # ...so it stays the same (Ollama reuses its cache)
+
+    def test_a_full_context_is_reported(self):
+        from unittest import mock
+
+        from jarvis.llm.ollama import OllamaProvider
+
+        class Reply:
+            status_code, text = 200, ""
+
+            def __init__(self, data=None, lines=()):
+                self.data, self.lines = data, lines
+
+            def json(self):
+                return self.data
+
+            def raise_for_status(self):
+                pass
+
+            def iter_lines(self):
+                return iter(self.lines)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        p = OllamaProvider(system_prompt="s", tools=[], num_ctx=8192)
+        full = {"message": {"role": "assistant", "content": "Hi."}, "done": True, "prompt_eval_count": 8192}
+        with mock.patch("jarvis.llm.ollama.requests.post", return_value=Reply(full)), \
+                self.assertLogs("jarvis.llm.base", "WARNING") as logs:
+            p.add_user("hi")
+            p.step()
+        self.assertIn("filled the 8192-token context", logs.output[0])
+        lines = [json.dumps({"message": {"content": "Hi."}}), json.dumps({**full, "message": {}})]
+        with mock.patch("jarvis.llm.ollama.requests.post", return_value=Reply(lines=lines)), \
+                self.assertLogs("jarvis.llm.base", "WARNING"):
+            p.step(on_text=lambda s: None)
+        roomy = {**full, "prompt_eval_count": 2500}
+        with mock.patch("jarvis.llm.ollama.requests.post", return_value=Reply(roomy)), \
+                self.assertNoLogs("jarvis.llm.base", "WARNING"):
+            p.step()
+
+    def test_small_talk_reaches_the_brain_unchanged(self):
+        p = Recorder([Turn(text="Why did the chicken cross the road?")])
+        agent_with(p, self.mem).handle("tell me a joke")
+        self.assertEqual(p.messages[0]["content"], "tell me a joke")
 
 
 if __name__ == "__main__":

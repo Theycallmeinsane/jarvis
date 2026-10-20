@@ -319,7 +319,7 @@ def _netsh(*args) -> str:
 @tool("Wi-Fi: status, list saved networks, connect to a saved network, or disconnect.",
       {"action": {"type": "string", "enum": ["status", "saved", "connect", "disconnect"]},
        "network": {"type": "string", "description": "Saved network name for 'connect'"}},
-      required=["action"], triggers=("wifi", "wi-fi", "wireless", "network", "internet", "connect"))
+      required=["action"], triggers=("wifi", "wi-fi", "wi fi", "wireless", "network", "internet", "connect"))
 def wifi(action: str, network: str = ""):
     if action == "status":
         out = _netsh("show", "interfaces")
