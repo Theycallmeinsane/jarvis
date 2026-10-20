@@ -80,8 +80,9 @@ First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (1
   only run if your request actually mentions that kind of action, so a 4B model can't open your browser
   when you asked for a story.
 * Risky actions (closing apps, sending email, shutdown, PowerShell) ask *"Shall I…?"* and wait for a yes.
-* **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json` and known in every future
-  conversation; "what do you remember about me?" / "forget Sara". Recent exchanges (`data/history.jsonl`) are
+* **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json`; later, a request that is
+  about it ("what's my sister called?", misheard spellings included) brings that fact along to the brain, and
+  "what do you remember about me?" brings them all; "forget Sara". Recent exchanges (`data/history.jsonl`) are
   replayed when Jarvis restarts, so it picks up where you left off.
 
 ### Tray app
@@ -378,6 +379,14 @@ Any other [Piper voice](https://huggingface.co/rhasspy/piper-voices) works too: 
 * **STT accuracy vs speed:** `stt.model` `base.en` (fastest) → `small.en` (default) → `large-v3-turbo` (best, GPU).
 * **Wrong microphone:** `.\jarvis.bat --list-devices`, then set `audio.input_device` to the index or part of its name.
 * **Slow first answer:** the Ollama model is loaded at start-up and kept warm for 30 minutes (`keep_alive`).
+* **Which tools a local model sees:** all ~100 tool definitions (~10k tokens) don't fit an 8k context, so with
+  `llm.tool_selection: true` (default) each request offers a local brain only the tools it needs, at most
+  `llm.max_tools` (16; usually 1–4), plus the previous turn's for follow-ups like "a bit more". They're picked by
+  the request's words, speech-to-text slips included ("whether", "valume", "screen shot", "spotfy"); small talk
+  gets none. Claude always gets all of them. If a request doesn't get the tool it needs, add the words you say
+  for it to `SAID` / `PHRASES` in `jarvis/tool_select.py` and the request to `tests/test_tool_pick.py`. With a
+  32k+ context you can set `tool_selection: false` to send everything. A log line "the prompt filled the
+  …-token context" means the model lost its instructions: raise `num_ctx` or lower `max_tools`.
 
 ## Tested on
 

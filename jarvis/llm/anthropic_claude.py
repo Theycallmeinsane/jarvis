@@ -49,6 +49,9 @@ class ClaudeProvider(LLMProvider):
                 on_text(text)
             return stream.get_final_message()
 
+    def tool_defs(self, tools: list[dict]) -> list[dict]:
+        return [{"name": t["name"], "description": t["description"], "input_schema": t["parameters"]} for t in tools]
+
     def step(self, use_tools: bool = True, on_text=None) -> Turn:
         kwargs = dict(
             model=self.model,

@@ -16,7 +16,8 @@ assistant:
 
 memory:
   enabled: true
-  facts_file: data/memory.json      # "remember that ..." facts, added to every conversation
+  facts_file: data/memory.json      # "remember that ..." facts; a request gets the ones it is about
+  facts_per_request: 5              # at most this many go with one request ("what do you know about me": 20)
   history_file: data/history.jsonl  # log of every exchange
   restore_turns: 2                  # after a restart, replay this many recent exchanges (0 = none)
   restore_within_minutes: 30        # ...if they happened within this many minutes
@@ -57,6 +58,8 @@ llm:
   provider: ollama            # ollama | lmstudio | openai_compat | claude   (local is the default)
   temperature: 0.2
   max_history_messages: 20    # local models only; trimmed oldest-first
+  tool_selection: true        # local models only see the tools a request needs (all ~100 overflow an 8k context)
+  max_tools: 16               # most tools a local model is offered per request (usually 1-4 are picked)
   keep_warm_minutes: 20       # re-touch a local model this often while idle so it isn't unloaded (0 = off)
   providers:
     ollama:
