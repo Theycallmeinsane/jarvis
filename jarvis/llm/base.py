@@ -46,6 +46,14 @@ class LLMProvider:
     def reset(self):
         self.messages = []
 
+    def set_tools(self, tools: list[dict]):
+        """Change the tools offered from the next step on (a local brain gets only the ones that fit the request)."""
+        self.tools = tools
+        self._tool_defs = self.tool_defs(tools)
+
+    def tool_defs(self, tools: list[dict]) -> list[dict]:
+        return [{"type": "function", "function": t} for t in tools]
+
     def add_user(self, text: str):
         self.messages.append({"role": "user", "content": text})
 

@@ -92,8 +92,15 @@ class Agent:
                                       address_rule=rule, today=dt.date.today().strftime("%A %d %B %Y"))
         return prompt + (self.memory.facts_prompt() if self.memory else "")
 
+    def _local(self, p: LLMProvider) -> bool:
+        """A brain with a small context window, which gets only the tools that fit each request."""
+        return (getattr(p, "name", "") != "claude" and hasattr(p, "set_tools")
+                and self.cfg.llm.get("tool_selection", True))
+
     def _make(self, name: str) -> LLMProvider:
         p = create_provider(name, self.cfg.llm, self._system_prompt(), self.toolbox.schemas())
+        if self._local(p):
+            p.set_tools([])          # chosen per request in _offer_tools
         problem = p.check()
         if problem:
             log.warning(problem)
@@ -108,6 +115,7 @@ class Agent:
         exchanges are replayed too; after an idle gap or an error the slate is clean, so nothing stale is repeated.
         (The system prompt only changes here, never mid-conversation, so histories stay append-only.)"""
         p.reset()
+        self._recent_tools: list[str] = []
         old_prompt, p.system_prompt = p.system_prompt, self._system_prompt()
         if self.memory and prime_now:
             p.messages = self.memory.seed_messages()
@@ -186,10 +194,31 @@ class Agent:
         self._last_activity = time.monotonic()
         return reply
 
+    def _offer_tools(self, p: LLMProvider, text: str):
+        """Give a local brain only the tools that fit this request (and the last turn's, for follow-ups), so the
+        prompt stays inside its context window. Everything at once overflowed it, and Ollama then cut Jarvis's
+        own instructions from the start of the prompt."""
+        if not self._local(p):
+            return
+        from .tool_select import fit, pick
+
+        names = pick(self.toolbox, text, getattr(self, "_recent_tools", []),
+                     max_tools=int(self.cfg.llm.get("max_tools", 16)))
+        schemas = [self.toolbox.get(n).schema(self.cfg) for n in names]
+        schemas = fit(p, schemas, int(getattr(p, "num_ctx", 0) or 0))
+        p.set_tools(schemas)
+        log.info("brain sees %d tools: %s", len(schemas), ", ".join(t["name"] for t in schemas) or "none")
+
+    def _note_tools(self, names: list[str]):
+        self._recent_tools = list(dict.fromkeys(names))[:6]
+
     def _run(self, text: str, on_text: Callable[[str], None] | None = None) -> str:
         p = self.provider
         p.add_user(text)
         self._request = text
+        self.toolbox.context["request"] = text
+        self._offer_tools(p, text)
+        used: list[str] = []
         # small local models tend to chain unrequested tool calls, so they get fewer rounds (config: max_tool_rounds)
         rounds = int(getattr(p, "max_tool_rounds", None) or self.cfg.assistant.get("max_tool_steps", 6))
         for _ in range(rounds):
@@ -199,6 +228,8 @@ class Agent:
             if on_text and turn.text.strip():
                 on_text(" ")   # keep "Let me check." apart from the answer that follows
             results = [self._execute(call) for call in turn.tool_calls]
+            used += [c.name for c in turn.tool_calls]
+            self._note_tools(used)
             p.add_tool_results(results)
             direct = self._direct_reply(results)
             if direct:   # simple actions: say what really happened, no second model call
@@ -237,6 +268,8 @@ class Agent:
         from .llm import ToolCall
 
         self._request = text
+        self.toolbox.context["request"] = text
+        self._note_tools([name for name, _ in plan])      # "and louder" after a fast-path "volume up"
         results = [self._execute(ToolCall(f"fast_{i}", name, args), gate=False)
                    for i, (name, args) in enumerate(plan)]
         reply = self._direct_reply(results) or " ".join(r.content for r in results)

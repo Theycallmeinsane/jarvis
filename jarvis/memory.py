@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
 from pathlib import Path
@@ -54,9 +55,17 @@ class Memory:
         return f"I'll remember that {fact}."
 
     def forget(self, query: str) -> str:
+        """Drop facts that contain the query, or all of its words ("my favourite colour" drops "favourite colour
+        is blue")."""
         q = query.lower().strip()
+        words = [w for w in re.findall(r"[\w']+", q) if w not in ("my", "the", "a", "an", "about", "that", "is", "me")]
+
+        def matches(fact: str) -> bool:
+            f = fact.lower()
+            return q in f or bool(words) and all(re.search(rf"\b{re.escape(w)}", f) for w in words)
+
         with self._lock:
-            keep = [f for f in self.facts if q not in f["fact"].lower()]
+            keep = [f for f in self.facts if not matches(f["fact"])]
             removed = len(self.facts) - len(keep)
             if removed:
                 self.facts = keep
@@ -67,7 +76,9 @@ class Memory:
         if not self.facts:
             return ""
         lines = "\n".join(f"- {f['fact']}" for f in self.facts)
-        return f"\n\nThings you remember about the user (from earlier sessions):\n{lines}"
+        return (f"\n\nThings the user asked you to remember (from earlier sessions). Use one only when it matters "
+                f"to what they ask now; never bring them up otherwise, and don't claim to know anything else about "
+                f"them:\n{lines}")
 
     # ------------------------------------------------------------ history
 
