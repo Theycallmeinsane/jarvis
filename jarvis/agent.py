@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import re
 import threading
 import time
 from typing import Callable
@@ -44,6 +45,18 @@ SPEAKS_RESULT = {
 }
 
 
+# a reply that says Jarvis has no way to do what was asked: a gap the tool builder can fill
+CANT = re.compile(r"\b(i (can't|cannot|can not|am not able to|'m not able to|am unable to|'m unable to|"
+                  r"don't have (a |the |any )?(way|tool|ability|access|option)|do not have (a |the |any )?"
+                  r"(way|tool|ability|access))|i have no (way|tool)|there(?:'s| is) no tool|"
+                  r"not something i can do|beyond what i can do|no tool (for|to))\b", re.I)
+# "yes" to "want me to build it?"
+AFFIRM = re.compile(r"(?:yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|go for it|please do|build it|"
+                    r"make it|do that|absolutely|of course)(?: (?:please|build it|do it|go ahead|thanks))*")
+BUILD_IT = re.compile(r"(?:yes )?(?:build|make|write|code|create) (?:it|that|one|the tool|a tool for (?:it|that))")
+OFFER = "I could write a new tool for that. Want me to build it?"
+
+
 class Agent:
     def __init__(self, cfg: Section, notify: Callable[[str], None] | None = None,
                  confirm: Callable[[str], bool] | None = None, provider: str | None = None,
@@ -56,7 +69,9 @@ class Agent:
         self.toolbox = ToolBox(cfg, context={
             "notify": notify, "switch_model": self._request_switch, "ask_claude": self._ask_claude,
             "memory": self.memory, "speak": speak, "switch_voice": switch_voice, "unduck": unduck,
-            "confirm": self.confirm})
+            "confirm": self.confirm, "last_gap": None})
+        self._offered_build_at = 0.0
+        self._tools_version = self.toolbox.version
         self._pending_switch: str | None = None
         self._lock = threading.RLock()   # requests, scheduled routines and tray brain switches take turns
         self._claude_helper = None
@@ -165,8 +180,9 @@ class Agent:
 
         try:
             t0 = time.perf_counter()
-            plan = None
-            if (self.cfg.get("router") or {}).get("enabled", True):
+            self._refresh_tools()
+            plan = self._build_follow_up(text)
+            if not plan and (self.cfg.get("router") or {}).get("enabled", True):
                 from .router import route
 
                 plan = route(text, self.toolbox, self.cfg)
@@ -176,8 +192,10 @@ class Agent:
             else:
                 reply = self._run(text, on_text)
                 log.info("brain (%s) answered in %.2fs", self.provider.label, time.perf_counter() - t0)
+                reply = self._check_gap(text, reply, emit)
             if self.memory and reply:
                 self.memory.log_exchange(text, reply, self.provider.label)
+                self.memory.notice(text)
         except Exception as e:
             log.exception("LLM error")
             reply = f"Sorry, my {self.provider.name} brain ran into a problem: {e.__class__.__name__}."
@@ -194,6 +212,54 @@ class Agent:
             reply = (reply + " " if reply else "") + note
         self._last_activity = time.monotonic()
         return reply
+
+    # ------------------------------------------------------------ the tool builder's loop
+
+    def _refresh_tools(self):
+        """A tool was built (or switched off) since the last request: a brain that gets every tool sees the change."""
+        version = getattr(self.toolbox, "version", 0)
+        if version != getattr(self, "_tools_version", version) and not self._local(self.provider):
+            self.provider.set_tools(self.toolbox.schemas())
+        self._tools_version = version
+
+    def _builder_on(self) -> bool:
+        t = self.cfg.get("toolsmith") or {}
+        return bool(t.get("enabled", True) and t.get("offer", True) and self.toolbox.get("build_tool"))
+
+    def _check_gap(self, text: str, reply: str, emit) -> str:
+        """The brain answered without using a tool and said it can't do this: remember the request as a gap, and
+        offer to write a tool for it."""
+        if not reply or getattr(self, "_last_used", None) or not CANT.search(reply) or not self._builder_on():
+            return reply
+        from .router import normalize
+
+        if len(normalize(text).split()) < 3:          # "can you?" - nothing to build from
+            return reply
+        gap = {"t": time.time(), "request": text}
+        self.toolbox.context["last_gap"] = gap
+        try:
+            from .tools.toolsmith_tools import smith
+
+            smith(self.toolbox).log_gap(text, reply)
+        except Exception as e:
+            log.debug("couldn't log the gap: %s", e)
+        self._offered_build_at = time.monotonic()
+        emit(" " + OFFER)
+        return reply.rstrip() + " " + OFFER
+
+    def _build_follow_up(self, text: str) -> list[tuple[str, dict]] | None:
+        """ "Yes" right after the offer, or "build it" while a gap is fresh: build the tool, no brain needed."""
+        if not self.toolbox.get("build_tool"):
+            return None
+        from .router import normalize
+
+        t = normalize(text)
+        gap = self.toolbox.context.get("last_gap")
+        offered = time.monotonic() - getattr(self, "_offered_build_at", 0.0) < 120
+        self._offered_build_at = 0.0
+        if gap and (offered and AFFIRM.fullmatch(t) or BUILD_IT.fullmatch(t)):
+            return [("build_tool", {"capability": ""})]
+        return None
 
     def _offer_tools(self, p: LLMProvider, text: str):
         """Give a local brain only the tools that fit this request (and the last turn's, for follow-ups), so the
@@ -221,6 +287,7 @@ class Agent:
         self.toolbox.context["request"] = text
         self._offer_tools(p, text)
         used: list[str] = []
+        self._last_used = used
         # small local models tend to chain unrequested tool calls, so they get fewer rounds (config: max_tool_rounds)
         rounds = int(getattr(p, "max_tool_rounds", None) or self.cfg.assistant.get("max_tool_steps", 6))
         for _ in range(rounds):

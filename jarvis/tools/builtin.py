@@ -100,27 +100,24 @@ def wikipedia_summary(topic: str):
 
 
 @tool("Look something up on the web and get text back to answer from (current events, prices, scores, "
-      "release dates, anything after your training data). Doesn't open a browser.",
-      {"query": {"type": "string"},
+      "release dates, anything after your training data). Reads the top pages, not just the snippets, and "
+      "keeps the results so the user can say 'open the second one'. Doesn't open a browser.",
+      {"query": {"type": "string", "description": "What to search for, in a few words"},
        "news": {"type": "boolean", "description": "true for latest news / headlines"}},
       required=["query"], enabled=lambda cfg: cfg.tools.get("web_lookup", True),
       # only for things that change: well-known facts ("capital of Japan") are answered directly
       triggers=("latest", "news", "today", "current", "now", "recent", "price", "cost", "score", "won", "winner",
                 "release", "update", "search", "look up", "lookup", "google", "online", "internet", "web",
                 "this week", "this year", "yesterday", "tonight", "tomorrow", "stock", "2025", "2026", "2027",
-                "who is the", "what happened", "trending", "headline"))
-def web_lookup(query: str, news: bool = False):
-    from ddgs import DDGS
+                "who is the", "what happened", "trending", "headline", "find out", "check"))
+def web_lookup(query: str, news: bool = False, ctx=None):
+    from ..websearch import SearchError, shared
 
-    with DDGS() as d:
-        if news:
-            rows = d.news(query, max_results=5)
-            lines = [f"{r.get('date', '')[:10]} {r.get('source', '')}: {r['title']}. {r.get('body', '')[:200]}"
-                     for r in rows]
-        else:
-            rows = d.text(query, max_results=5)
-            lines = [f"{r['title']}: {r.get('body', '')[:300]}" for r in rows]
-    return "\n".join(lines) or f"Nothing found for {query}."
+    searcher = shared((ctx.cfg.get("web") if ctx else None) or {})
+    try:
+        return searcher.lookup(query, news=True if news else None)
+    except SearchError as e:
+        raise ToolFailed(f"I couldn't search the web: {e}.")
 
 
 # ---------------------------------------------------------------- apps & web

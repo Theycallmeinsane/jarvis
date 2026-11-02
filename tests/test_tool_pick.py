@@ -668,6 +668,27 @@ MORE_CASES = [
 ]
 CASES += MORE_CASES
 
+# reading the web, recalling earlier conversations, building new tools
+CASES += [
+    ("read me the bbc dot com article about the election", "read_webpage"),
+    ("what does the article on theverge.com say about the new phone", "read_webpage"),
+    ("read the second result", "read_webpage"),
+    ("research the best budget graphics card", "deep_research"),
+    ("find out everything about the james webb telescope", "deep_research"),
+    ("what's the difference between ddr4 and ddr5", "deep_research|web_lookup"),
+    ("pros and cons of electric cars", "deep_research"),
+    ("open the second result", "open_search_result"),
+    ("what did we talk about yesterday", "recall_conversation"),
+    ("what was that song you mentioned earlier", "recall_conversation"),
+    ("what did I ask you this morning", "recall_conversation"),
+    ("build a tool that converts currencies", "build_tool"),
+    ("teach yourself to check crypto prices", "build_tool"),
+    ("make a new skill for unit conversions", "build_tool"),
+    ("what tools have you built", "manage_tools"),
+    ("turn off the currency tool", "manage_tools"),
+    ("what can't you do yet", "manage_tools"),
+]
+
 # tools that are only there when set up (Google account, API key, PowerShell switched on)
 OPTIONAL_CASES = [
     ("what's on my calendar tomorrow", "calendar_upcoming"),
@@ -731,6 +752,10 @@ FOLLOW_UPS = [
     (['chrome_tabs'], 'switch to the second tab', 'chrome_tab'),
     (['brightness'], 'a bit brighter', 'brightness'),
     (['find_process'], 'end it', 'end_process'),
+    (['web_lookup'], 'open the second one', 'open_search_result'),
+    (['web_lookup'], 'read the first one to me', 'read_webpage'),
+    (['web_lookup'], 'what does that page say', 'read_webpage'),
+    (['manage_tools'], 'delete it', 'manage_tools'),
 ]
 
 # chat: no tool at all

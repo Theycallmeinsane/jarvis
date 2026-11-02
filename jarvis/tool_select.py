@@ -139,6 +139,13 @@ SAID = {
     "gmail_send": "send email",
     "ask_claude": "claude",
     "run_powershell": "powershell command terminal",
+    # reading the web, recalling conversations, building new tools
+    "read_webpage": "webpage article result results link site page",
+    "deep_research": "research compare comparison versus investigate thorough detailed reviews",
+    "open_search_result": "result results link",
+    "recall_conversation": "conversation earlier yesterday talked discussed mentioned said told",
+    "build_tool": "build tool skill learn teach",
+    "manage_tools": "tools skills built gaps",
 }
 
 # word groups that point straight at a tool, matched against the request's lower-case words with apostrophes
@@ -261,6 +268,22 @@ PHRASES = {
     "gmail_find_address": (r"email address",),
     "gmail_send": (r"email \w+ that", r"send an email"),
     "gmail_draft": (r"draft an email",),
+    "read_webpage": (r"read (me )?(the )?(\w+ )?(result|link|article|page|website|site)",
+                     r"what does (the |that |this )?(\w+ )?(article|page|site|website|result) say",
+                     r"read \w+ dot (com|org|net|io)"),
+    "deep_research": (r"find out (everything|more|all) about", r"(dig|look) (deeper|into)", r"pros and cons",
+                      r"difference between", r"which is better", r"in depth", r"research"),
+    "open_search_result": (r"open (the )?(first|second|third|fourth|fifth|top|last) (one|result|link)",
+                           r"open (that|this) link"),
+    "recall_conversation": (r"what (did|have) we (talk|talked|discuss|discussed|chat|chatted)",
+                            r"what did i (ask|tell|say)", r"what did you (say|tell|recommend|suggest|mention)",
+                            r"last time", r"earlier (today|you)",
+                            r"(you|we) (said|mentioned|talked about) (before|earlier)"),
+    "build_tool": (r"(build|make|write|code|create) (me )?(a |the )?(new )?(tool|skill)", r"teach yourself",
+                   r"learn (how )?to", r"build it"),
+    "manage_tools": (r"(what|which) tools (have )?you (built|made|written|learned|learnt)",
+                     r"(turn off|disable|delete|remove|enable|switch on|switch off) the \w+ tool",
+                     r"what can(t| not) you do", r"tools you (built|made)"),
 }
 
 # after these tools, people usually go on to those ("find my resume" ... "open it")
@@ -274,6 +297,8 @@ FOLLOW_ON = {
     "github_builds": "github_build_failure github_rerun_build", "github_notifications": "github_open_items",
     "read_notes": "take_note", "gmail_unread": "gmail_read", "gmail_find_address": "gmail_send gmail_draft",
     "list_memories": "forget",
+    "web_lookup": "read_webpage open_search_result deep_research", "deep_research": "read_webpage open_search_result",
+    "read_webpage": "open_search_result", "build_tool": "manage_tools", "manage_tools": "build_tool",
 }
 
 GENERIC_NAME_WORDS = {"get", "set", "list", "read", "take", "run", "open", "find", "chrome", "action", "control",
@@ -340,7 +365,7 @@ class _Index:
                 if w not in GENERIC_NAME_WORDS:
                     entries.append((stem(w), name, NAME_W, STRONG))
                     self.vocab[_bucket(w)].add(w)
-            for w in SAID.get(name, "").split():
+            for w in SAID.get(name, "").split() + tokens(getattr(tool, "keywords", "") or ""):
                 entries.append((stem(w), name, SAID_W, STRONG))
                 self.vocab[_bucket(w)].add(w)
             for p in PHRASES.get(name, ()):
