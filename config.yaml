@@ -21,6 +21,11 @@ memory:
   history_file: data/history.jsonl  # log of every exchange
   restore_turns: 2                  # after a restart, replay this many recent exchanges (0 = none)
   restore_within_minutes: 30        # ...if they happened within this many minutes
+  auto_remember: true               # keep plain statements about you ("I live in Lahore", "I'm allergic to cats")
+  keep_dated_facts_days: 1          # "dentist tomorrow" is stored with the date and dropped this long after it
+  history_max_mb: 20                # the conversation log is trimmed past this size
+  semantic: false                   # also match facts by meaning (needs: ollama pull nomic-embed-text)
+  embed_model: nomic-embed-text
 
 wake_word:
   model: hey_jarvis           # built-in openWakeWord model, or a path to your own .onnx
@@ -125,6 +130,28 @@ tools:
   screenshots_dir: ~/Pictures/Jarvis
   search_dirs: [~/Desktop, ~/Documents, ~/Downloads]
   disabled: []                # tool names never offered to the brain, e.g. [wifi, theme, power]
+
+web:                          # web_lookup / read_webpage / deep_research: answers from the pages, not just snippets
+  enabled: true
+  engines: [searxng, brave, google, tavily, ddgs]   # first one that's set up and answers wins
+  searxng_url: null           # your own SearXNG (Google + Bing + more, private, no key), e.g. http://127.0.0.1:8888
+                              # brave / google / tavily switch on when their key is in .env (see .env.example)
+  read_top: 2                 # pages read for each lookup (0 = snippets only, fastest)
+  research_pages: 4           # pages read for "research ..." / deep_research
+  max_chars: 3500             # most text handed to the brain per lookup (keeps a local model's context free)
+  cache_minutes: 10
+  blocked_sites: []           # never use results from these, e.g. [pinterest.com]
+
+toolsmith:                    # when Jarvis can't do something, it offers to write a tool for it ("build it")
+  enabled: true
+  offer: true                 # offer after "I can't do that"; false = only when you ask ("build a tool that ...")
+  provider: auto              # who writes the code: auto = Claude if ANTHROPIC_API_KEY is set, else the current brain
+  model: null                 # e.g. qwen2.5-coder:14b for a local coder (ollama pull it first)
+  effort: high                # Claude's effort for writing code
+  max_attempts: 3             # rounds of fixing review / test failures before giving up
+  test_timeout: 120           # seconds; generated tests run in a sandbox (no network, no files outside it, no programs)
+  git_commit: false           # commit an approved tool (jarvis/tools/generated + tests/generated) to the repo
+  load_generated: true        # false = never load generated tools, approved or not
 
 google:                       # Calendar + Gmail; tools appear once the credentials file exists
   enabled: true

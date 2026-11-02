@@ -83,7 +83,15 @@ First time with your own voice? Follow [docs/FIRST_RUN.md](docs/FIRST_RUN.md) (1
 * **Memory:** "remember that my sister's name is Sara" is kept in `data/memory.json`; later, a request that is
   about it ("what's my sister called?", misheard spellings included) brings that fact along to the brain, and
   "what do you remember about me?" brings them all; "forget Sara". Recent exchanges (`data/history.jsonl`) are
-  replayed when Jarvis restarts, so it picks up where you left off.
+  replayed when Jarvis restarts, so it picks up where you left off. Memory keeps itself tidy:
+  * a newer fact replaces the old one about the same thing ("my favourite colour is green now" replaces blue);
+  * "remember the dentist is tomorrow" is stored as the real date, and dropped once that day has passed;
+  * plain statements about you are kept without saying "remember" ("I live in Lahore", "I'm allergic to cats",
+    "I work at ..."; never from "type ...", questions or "if I ..."; `memory.auto_remember: false` turns it off);
+  * when the list is full, the facts that were never useful go first, not just the oldest;
+  * "what did we talk about yesterday?" / "what was that book you suggested?" searches earlier conversations;
+  * optional matching by meaning: `memory.semantic: true` plus `ollama pull nomic-embed-text` lets "can I have a
+    Snickers?" find "allergic to peanuts" although no word is shared.
 
 ### Tray app
 
@@ -102,7 +110,13 @@ Logs go to `data/jarvis.log`.
 | "Search YouTube for lofi", "google the iPhone 18 release date" | `web_search` |
 | "Open github.com" | `open_website` |
 | "Who is Ada Lovelace?" | `wikipedia_summary` |
-| "What's the latest Python version?", "any tech news today?" | `web_lookup` (DuckDuckGo results read back, no browser) |
+| "What's the latest Python version?", "any tech news today?" | `web_lookup` (searches, then reads the top pages for the answer; no browser) |
+| "Read the second result", "what does bbc.com say about the election?" | `read_webpage` (just the parts that answer you) |
+| "Open the second one" (after a search) | `open_search_result` |
+| "Research the best budget GPU", "pros and cons of electric cars" | `deep_research` (several searches and pages, with sources) |
+| "What did we talk about yesterday?", "what was that song you mentioned?" | `recall_conversation` |
+| "Build a tool that converts currencies", or "build it" after Jarvis says it can't | `build_tool` (see below) |
+| "What tools have you built?", "turn off the currency tool" | `manage_tools` |
 | "What does this error on my screen say?", "what's open?" | `look_at_screen` (local qwen3.5 vision, or Claude) |
 | "What's the weather in Paris?" | `get_weather` (wttr.in) |
 | "Volume to 30", "mute", "louder" | `volume` (the whole PC) |
@@ -195,6 +209,49 @@ def work_mode():
 
 The description string is what the model sees, so describe *when* to use it.
 Add `params={...}` (JSON-schema per argument) for inputs and `dangerous=True` to require a spoken yes.
+
+### Jarvis builds its own tools
+
+When Jarvis has no tool for something, it says so and offers to write one:
+
+> "How much is 50 dollars in rupees?" ... "I can't check exchange rates. I could write a new tool for that. Want me
+> to build it?" ... "Yes." ... "I've built convert currency: it converts between currencies with today's rates.
+> It passed 4 tests. Shall I switch it on?" ... "Yes." ... "Done."
+
+You can also ask directly: "build a tool that tells me the next prayer time", "teach yourself to check crypto
+prices". What happens in between (`jarvis/toolsmith.py`):
+
+1. A coding model writes the tool and its unit tests: Claude when `ANTHROPIC_API_KEY` is set, otherwise your
+   current brain or the model in `toolsmith.model` (a local coder such as `qwen2.5-coder:14b` works well).
+2. **Review before anything runs:** the code must parse, may not use `eval`/`exec`, pickle, Jarvis's secrets or
+   internals, or run code on import. Anything that writes or deletes files, starts or stops programs, touches the
+   registry or sends data makes the tool `dangerous`, so Jarvis asks before every use.
+3. **Sandboxed tests** (`jarvis/tool_sandbox.py`): the tests run in a separate process with no API keys, home,
+   AppData and temp pointing at a throwaway folder, and an audit hook that refuses network connections, starting
+   programs, Windows API calls, registry changes and writing files outside that folder. It's there to catch
+   mistakes in generated code, not to contain code written to escape it; your approval is the real gate.
+4. Review problems and test failures go back to the model to fix (3 rounds at most, `toolsmith.max_attempts`).
+5. **You approve it.** Only then is it switched on, from the next request, with no restart. The code stays in the
+   repo (`jarvis/tools/generated/`, tests in `tests/generated/`, so CI runs them too); the approval and a
+   fingerprint of the approved code are kept per PC in `data/toolsmith.json`. A tool whose code changed since you
+   approved it, or that arrived through a git pull, stays off until you approve it again ("enable the currency
+   tool", which re-runs its tests first).
+
+"What tools have you built?", "turn off / delete the currency tool", and "what can't you do yet?" (the requests it
+couldn't handle, from `data/tool_gaps.jsonl`) manage them. `toolsmith.git_commit: true` commits each approved tool.
+
+### Web search
+
+`web_lookup` cleans what you said into a search ("hey jarvis can you google the best budget GPU for me" becomes
+"the best budget GPU"), limits it to the last day or week when you ask about news, scores or prices, then reads
+the top two pages and hands the brain the passages that answer the question, with the site names, instead of
+two-line snippets. "Open the second one" and "read the third result" work on those results afterwards, and
+"research ..." reads more pages from more than one search. Pages on your own network are never fetched, and page
+text is marked as information only, so instructions hidden in a page aren't followed.
+
+Engines (`web.engines`, first one set up wins, the others are fallbacks): DuckDuckGo through `ddgs` needs nothing;
+for Google-quality results run [SearXNG](https://docs.searxng.org/) locally and set `web.searxng_url`, or add a
+`BRAVE_API_KEY`, `GOOGLE_API_KEY` + `GOOGLE_CSE_ID`, or `TAVILY_API_KEY` to `.env`.
 
 ## Google Calendar & Gmail (optional)
 
@@ -409,7 +466,10 @@ jarvis/
   app.py           voice loop (wake → record → STT → agent → TTS → follow-up), barge-in
   tray.py          system tray icon + menu, start-with-Windows
   agent.py         tool-calling loop, confirmation, brain switching
-  memory.py        remembered facts + conversation history across restarts
+  memory.py        remembered facts (updates, dates, noticing) + conversation history and recall
+  websearch.py     search engines, query cleanup, reading the top results, research
+  webtext.py       fetching a page safely and pulling out the article text and the passages that answer
+  toolsmith.py     writes, reviews, tests and installs new tools; tool_sandbox.py runs their tests
   routines.py      config-defined multi-step workflows + daily scheduler
   mcp_client.py    MCP servers' tools as Jarvis tools
   vision.py        screenshot → vision model (local Ollama or Claude)
@@ -422,7 +482,9 @@ jarvis/
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
-                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
+                   memory_tools.py (remember / forget / recall), chrome.py (tabs, pages, videos, Claude),
+                   research.py (read pages, research, open results), toolsmith_tools.py (build / manage tools),
+                   generated/ (tools Jarvis wrote, switched on only once you approve them)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
 scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)

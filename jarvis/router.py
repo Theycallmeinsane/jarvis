@@ -7,6 +7,7 @@ its "Shall I…?" confirmation.
 from __future__ import annotations
 
 import re
+import time
 
 WORD_NUMBERS = {
     "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
@@ -17,7 +18,9 @@ UNIT_SECONDS = {"second": 1, "sec": 1, "minute": 60, "min": 60, "hour": 3600}
 
 FILLER = re.compile(r"^(hey |ok |okay )?(jarvis[, ]*)?(please |can you |could you |would you |will you |"
                     r"i want you to |go ahead and |just )*", re.I)
-APPS_NOT_FOR_OPEN = re.compile(r"\b(settings?|folder|file|website|\.com|\.org|tab|link|page|document|my notes)\b")
+APPS_NOT_FOR_OPEN = re.compile(r"\b(settings?|folder|file|website|\.com|\.org|tab|link|page|document|my notes|"
+                               r"one|result|results|first|second|third|fourth|fifth|last|it|that|this)\b")
+ORDINAL = {"first": 1, "top": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6}
 
 
 def normalize(text: str) -> str:
@@ -271,6 +274,17 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
         # routines that need a spoken briefing (summarize: true) go through the brain instead
         if name in names and names[name].get("summarize", True) is False:
             return [("run_routine", {"name": name})]
+
+    # ---- "open the second one" right after a web search: that search result
+    m = re.fullmatch(r"(?:open|show me|pull up|bring up|go to|visit) (?:the )?(?P<n>first|top|second|third|fourth|"
+                     r"fifth|sixth|\d)(?: one| result| link| site| page| website)?", t)
+    if m and has("open_search_result"):
+        from . import websearch
+
+        ws = websearch._shared
+        if ws and ws.last and time.time() - ws.last_time < 600:
+            n = ORDINAL.get(m.group("n")) or int(m.group("n"))
+            return [("open_search_result", {"number": n})]
 
     # ---- switch to an open window ("switch to chrome") or open an app ("open spotify")
     m = re.fullmatch(r"(?:switch|go|change) to (?:the )?(?P<w>[\w .'-]+?)(?: window| app)?", t)
