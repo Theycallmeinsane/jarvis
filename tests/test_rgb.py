@@ -46,9 +46,10 @@ class FakeClient:
 class RGBTests(unittest.TestCase):
     def setUp(self):
         self.client = FakeClient()
-        patcher = mock.patch.object(rt, "_client", return_value=self.client)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for patcher in (mock.patch.object(rt, "_client", return_value=self.client),
+                        mock.patch.object(rt, "_fusion_chip", return_value=None)):     # no Gigabyte chip here
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_colours(self):
         self.assertEqual(rt.parse_color("dim blue"), (0, 0, 76))
@@ -82,6 +83,8 @@ class RGBTests(unittest.TestCase):
 class NotRunningTests(unittest.TestCase):
     def test_explains_conflict_with_vendor_app(self):
         with mock.patch("openrgb.OpenRGBClient", side_effect=ConnectionRefusedError), \
+                mock.patch.object(rt, "_fusion_chip", return_value=None), \
+                mock.patch.object(rt, "openrgb_path", return_value=None), \
                 mock.patch.object(rt, "_conflicting_apps", return_value=["Gigabyte RGB Fusion"]):
             with self.assertRaisesRegex(ToolFailed, "RGB Fusion is also running"):
                 rt.rgb("color", "red")

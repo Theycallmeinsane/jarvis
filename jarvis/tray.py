@@ -18,7 +18,7 @@ STATE_COLOURS = {
     "thinking": (235, 170, 30), "speaking": (0, 200, 220), "paused": (90, 90, 90), "error": (220, 50, 50),
 }
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-# tray "Lights (RGB)" menu: one click per look, through OpenRGB (e.g. a Gigabyte RGB Fusion 2 board)
+# tray "Lights (RGB)" menu: the lights panel, then one click per look (Gigabyte board directly, others via OpenRGB)
 LIGHT_PRESETS = [("Jarvis blue", "color", "jarvis blue"), ("Iron Man red", "color", "iron man red"),
                  ("Purple", "color", "purple"), ("Warm white", "color", "warm white"),
                  ("Dim blue", "color", "dim blue"), ("Rainbow", "effect", "rainbow"),
@@ -96,9 +96,10 @@ class TrayApp:
                 pystray.MenuItem(label, self._brain_setter(key), radio=True,
                                  checked=lambda _, k=key: self._brain() == k)
                 for label, key in self.BRAINS])),
-            pystray.MenuItem("Lights (RGB)", pystray.Menu(*[
-                pystray.MenuItem(label, self._rgb_setter(action, value))
-                for label, action, value in LIGHT_PRESETS])),
+            pystray.MenuItem("Lights (RGB)", pystray.Menu(
+                pystray.MenuItem("Lights panel...", self._lights_panel),
+                pystray.Menu.SEPARATOR,
+                *[pystray.MenuItem(label, self._rgb_setter(action, value)) for label, action, value in LIGHT_PRESETS])),
             pystray.MenuItem("Speed vs quality", pystray.Menu(*[
                 pystray.MenuItem(label, self._perf_setter(key), radio=True,
                                  checked=lambda _, k=key: (self.cfg.get("performance") or "balanced") == k)
@@ -174,6 +175,12 @@ class TrayApp:
                 self.icon.notify(msg[:250], "Jarvis lights")
             threading.Thread(target=work, daemon=True).start()
         return set_lights
+
+    @staticmethod
+    def _lights_panel(*_):
+        from .tools.rgb_tools import open_panel
+
+        open_panel()
 
     def _perf_setter(self, key: str):
         def set_perf(*_):

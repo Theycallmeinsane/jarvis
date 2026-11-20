@@ -141,6 +141,7 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
 
     # optional extras: informational, never counted as failures
     import os
+    import sys
 
     from .routines import routines_from
     from .tools.google_tools import _paths
@@ -162,6 +163,15 @@ def run_checks(cfg: Section, llm: str | None = None, tts: str | None = None) -> 
 
         ok, message = port_status(int((cfg.get("chrome") or {}).get("port", DEFAULT_PORT)))
         info("chrome", message if ok else "PROBLEM: " + message)
+    if sys.platform == "win32":
+        from . import fusion
+
+        try:
+            chip = fusion.find()
+            info("lights", f"{chip.name} (Gigabyte RGB Fusion 2): controlled directly")
+            chip.close()
+        except Exception as e:  # noqa: BLE001
+            info("lights", f"{e} Other lights go through OpenRGB.")
     info("hotkey", cfg.get("hotkey") or "off")
     info("routines", ", ".join(routines_from(cfg)) or "none")
     print(f"\n{'All systems go.' if not failures else f'{failures} problem(s) found.'}")
