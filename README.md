@@ -8,13 +8,49 @@ Your voice goes in through local speech-to-text (Whisper), a local brain (Ollama
 Windows workflows, and the answer comes out through a local open-source voice (a female voice by default).
 Nothing leaves your PC unless you switch the brain to Claude.
 
+## How it works
+
+```mermaid
+flowchart TD
+    subgraph ears["Hearing you"]
+        direction LR
+        wake["Wake word<br/>openWakeWord:<br/>hey Jarvis"] --> rec["Recording<br/>webrtcvad, stops<br/>when you pause"] --> stt["Speech to text<br/>faster-whisper"]
+    end
+
+    subgraph agent["Deciding: jarvis/agent.py"]
+        direction LR
+        router["Router: fast path<br/>common commands,<br/>no model call"] -- no match --> brain["Brain loop<br/>Ollama, LM Studio<br/>or Claude<br/>gets only the tools<br/>that fit the request,<br/>checks trigger words,<br/>asks before risky steps"]
+        memory[("Memory<br/>facts you asked for,<br/>recent exchanges")] --> brain
+    end
+
+    subgraph tools["Acting: jarvis/tools/"]
+        direction LR
+        chrome["Chrome tools<br/>social, browse, web"] ~~~ pc["PC and Windows<br/>apps, volume,<br/>windows, files"] ~~~ media["Media and lights<br/>Spotify, VLC,<br/>RGB Fusion"] ~~~ accounts["Accounts<br/>GitHub, Calendar,<br/>Gmail"]
+    end
+
+    subgraph web["Chrome"]
+        direction LR
+        bridge["Chrome bridge<br/>WebSocket on<br/>127.0.0.1"] --> ext["Jarvis Control<br/>extension<br/>clicks and reads pages"] --> tabs["Your tabs<br/>Instagram, Facebook,<br/>WhatsApp, Reddit,<br/>X, YouTube"]
+    end
+
+    voice["Answering<br/>Piper, Kokoro or SAPI,<br/>stops if you talk"]
+
+    ears -- your words as text --> agent
+    agent -- a ready plan or tool calls --> tools
+    tools -- Chrome commands --> web
+    agent -- spoken answer --> voice
 ```
- mic ─► openWakeWord ("hey jarvis") ─► webrtcvad (record until you pause) ─► faster-whisper (STT)
-                                                                                 │
- speaker ◄── Piper / Kokoro (TTS, female or male) ◄── agent ◄──► brain (Ollama · LM Studio · Claude · any OpenAI-compatible)
-                                                        │
-                                                        └──► Windows workflows: apps, windows, settings, media, timers...
-```
+
+- **Fast path first.** `jarvis/router.py` recognises common commands (volume, Spotify, timers, social sites,
+  browsing) by pattern and runs the tool straight away, with no model call. That keeps them instant and immune to
+  model mistakes.
+- **The brain for everything else.** `jarvis/agent.py` hands the request to the brain. A local brain is offered only
+  the tools that fit the request, so its prompt stays inside its context window; Claude gets all of them.
+- **Checks that don't rely on the model.** A tool with trigger words only runs when you said one of them, and
+  anything risky (deleting, sending a message, power) asks out loud first.
+- **Memory** keeps only what you asked it to remember, plus the last couple of exchanges after a restart.
+- **Chrome** is driven through the Jarvis Control extension: Chrome tools send commands to `jarvis/chrome_bridge.py`,
+  a WebSocket that only listens on this PC, and the extension clicks and reads the page.
 
 ## Quick start
 
