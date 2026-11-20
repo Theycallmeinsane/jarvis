@@ -91,6 +91,13 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
     if plan:
         return plan
 
+    # ---- Spotify: liked songs, albums, playlists, queue, shuffle/repeat, devices (needs the Web API set up)
+    from .tools.spotify_tools import route_spotify
+
+    plan = route_spotify(t, has)
+    if plan:
+        return plan
+
     # ---- media
     if has("media_control"):
         m = re.fullmatch(r"(?:pause|stop|halt)" + MEDIA_NOUN + MEDIA_APP, t)
@@ -122,6 +129,8 @@ def route(text: str, toolbox, cfg=None) -> list[tuple[str, dict]] | None:
             generic = re.fullmatch(r"(?:the |my |some |this |a |that )?(?:music|song|track|playlist|spotify|it|"
                                    r"something|anything|video|audio)(?: (?:on|in) spotify)?", song)
             if not generic and len(song) > 2:
+                if has("spotify_play"):        # Web API: finds and starts the exact song
+                    return [("spotify_play", {"query": song, "kind": "auto"})]
                 return [("play_song", {"song": song})]
 
     # ---- one app's volume: "spotify volume to 30", "turn spotify down", "mute discord", "music volume up"

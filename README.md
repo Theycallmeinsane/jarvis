@@ -107,6 +107,7 @@ Logs go to `data/jarvis.log`.
 | "Volume to 30", "mute", "louder" | `volume` (the whole PC) |
 | "Turn Spotify up", "increase the volume on Spotify", "mute Discord" | `app_volume` (one app) |
 | "Pause the music", "next song" | `media_control` |
+| "Play Glimpse of Us by Joji", "shuffle my liked songs", "add this to my gym playlist" | `spotify_play` / `spotify_control` / `spotify_playlist` (see [Spotify](#spotify-optional)) |
 | "Set a timer for 10 minutes", "remind me in an hour to stretch" | `set_timer` / `list_timers` / `cancel_timer` |
 | "Take a note: call the bank" / "read my notes" | `take_note` / `read_notes` (`data/notes.md`) |
 | "Find my resume PDF" / "open it" | `find_files` / `open_path` |
@@ -217,6 +218,43 @@ the Google sign-in once; the token is saved to `secrets\google_token.json`. Alre
 Permissions requested: calendar events (read/add), Gmail read, and Gmail compose (drafts + send).
 Jarvis never sends an email without reading the recipient, subject and body back to you and hearing a yes.
 Delete `secrets\google_token.json` to disconnect.
+
+## Spotify (optional)
+
+Play, pause and next work out of the box through Windows' media controls. For **full** control (any song,
+artist, album or playlist, your liked songs, queue, shuffle/repeat, seeking, liking songs, managing playlists,
+moving playback to your phone or a speaker) connect the Spotify Web API once, about 3 minutes:
+
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), sign in and **Create app**.
+   Any name/description; tick **Web API**.
+2. Under **Redirect URIs** add exactly `http://127.0.0.1:8888/callback` (Spotify no longer accepts
+   `localhost`) and save.
+3. Copy the app's **Client ID** into `.env` (copy `.env.example` if you don't have one):
+   `SPOTIFY_CLIENT_ID=your_client_id`. No client secret is needed (Jarvis signs in with PKCE).
+4. Run `.\jarvis.bat --spotify-login` (or say *"connect Spotify"*), approve in the browser, done. The token is
+   saved to `data\spotify_token.json` (git-ignored) and refreshed automatically; delete it to disconnect.
+
+Spotify's rules for personal ("Development mode") apps: the **app owner needs Spotify Premium**, and only
+you plus up to 5 users you add under *User Management* can sign in. If port 8888 is taken, use another one in
+both the dashboard and `SPOTIFY_REDIRECT_URI` in `.env`.
+
+| Say something like | What happens |
+|---|---|
+| "Play Blinding Lights", "play Glimpse of Us by Joji" | finds the exact song and plays it |
+| "Play some music by Daft Punk", "play the album Nevermind" | artist / album |
+| "Play my workout playlist", "shuffle my liked songs" | your playlists first, then public ones |
+| "Add Levitating to the queue", "what's next?" | queue |
+| "Shuffle on", "repeat this song", "turn off repeat" | shuffle / repeat |
+| "Skip ahead 30 seconds", "go back 1 minute", "skip to 1:30" | seek |
+| "Like this song", "remove this from my liked songs", "is this song liked?" | Liked Songs |
+| "Add this song to my gym playlist", "remove this from Late Night Drive" | playlists (current song, or name one) |
+| "Create a playlist called Road Trip", "what playlists do I have?" | create / list (delete always asks first) |
+| "Play it on my phone", "what Spotify devices are there?" | Spotify Connect devices |
+| "What's playing?", "pause", "next song" | as before (work even without the Web API) |
+
+If Spotify isn't open, Jarvis starts it and plays on this PC. Without Premium or the Web API, songs open in the
+Spotify app and play/pause/next fall back to Windows media controls. `spotify.default_device` in
+`config.local.yaml` picks where to play when nothing is active; `spotify.enabled: false` hides these tools.
 
 ## GitHub (optional)
 
@@ -413,7 +451,10 @@ jarvis/
   llm/             ollama.py, openai_compat.py (LM Studio, etc.), anthropic_claude.py
   tools/           registry.py (@tool decorator), builtin.py (workflows), windows.py (windows, desktops,
                    shortcuts, Settings, theme, Wi-Fi, read aloud), google_tools.py (Calendar, Gmail),
-                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude)
+                   memory_tools.py (remember / forget), chrome.py (tabs, pages, videos, Claude),
+                   spotify_tools.py (Spotify by voice)
+  spotify.py       Spotify Web API client + PKCE sign-in
+  media.py         Windows media session (play/pause/next for any player)
   chrome_bridge.py link to the Chrome extension (WebSocket on 127.0.0.1)
 extension/chrome/  the Jarvis Control extension (load unpacked; --chrome-setup)
 scripts/voice_smoke.py   Piper → wake word → Whisper check with no mic (also runs in GitHub Actions)

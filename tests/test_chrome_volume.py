@@ -41,7 +41,10 @@ class AppVolumeTests(unittest.TestCase):
     def test_whole_pc_and_other_spotify_commands_are_unchanged(self):
         self.assertEqual(route("increase volume", AllTools()), [("volume", {"action": "up"})])
         self.assertEqual(route("pause spotify", AllTools())[0][0], "media_control")
-        self.assertEqual(route("play glimpse of us on spotify", AllTools())[0][0], "play_song")
+        # with the Spotify Web API set up a named song goes to spotify_play, otherwise to play_song
+        self.assertEqual(route("play glimpse of us on spotify", AllTools())[0][0], "spotify_play")
+        no_api = type("NoApi", (), {"get": lambda self, n: None if n.startswith("spotify_") else object()})()
+        self.assertEqual(route("play glimpse of us on spotify", no_api)[0][0], "play_song")
 
     def test_brain_picking_system_volume_for_an_app_is_redirected(self):
         agent = Agent.__new__(Agent)
