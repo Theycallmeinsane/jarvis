@@ -151,8 +151,8 @@ def system_stats(section: str = "all"):
 
 @tool("Internet / network status: connected or not, connection type, local IP, ping time, and current "
       "download/upload speed. Use for 'am I online', 'is the internet working', 'how fast is my internet'.",
-      triggers=("internet", "network", "online", "connection", "connected", "wifi", "wi-fi", "ping", "ethernet",
-                "speed", "ip", "download", "upload", "lag"))
+      triggers=("internet", "network", "online", "connection", "connected", "wifi", "wi-fi", "wi fi", "ping",
+                "ethernet", "speed", "ip", "download", "upload", "lag"))
 def network_status():
     import psutil
 
@@ -233,7 +233,7 @@ def _end_question(args: dict) -> str:
 
 @tool("End (kill) a running program by name, e.g. a frozen app. Asks first; refuses system-critical processes.",
       {"name": {"type": "string"}}, dangerous=True, confirm=_end_question,
-      triggers=("end", "kill", "terminate", "force", "close", "stop", "frozen", "not responding", "quit"))
+      triggers=("end", "kill", "terminate", "force", "close", "stop", "frozen", "responding", "quit"))
 def end_process(name: str):
     import psutil
 
@@ -399,7 +399,8 @@ def _startup_entries() -> list[dict]:
 
 
 @tool("List the apps that start automatically with Windows (and whether each is enabled).",
-      triggers=("startup", "start up", "boot", "automatically", "autostart", "launch at", "on login"))
+      triggers=("startup", "start up", "boot", "automatically", "autostart", "launch at", "on login",
+                "with windows", "when windows start"))
 def list_startup_apps():
     entries = _startup_entries()
     if not entries:
@@ -415,7 +416,8 @@ def list_startup_apps():
 
 @tool("Enable or disable an app starting with Windows (like Task Manager's Startup tab). Asks first.",
       {"name": {"type": "string"}, "enabled": {"type": "boolean"}},
-      dangerous=True, triggers=("startup", "start up", "boot", "automatically", "autostart", "on login"),
+      dangerous=True, triggers=("startup", "start up", "boot", "automatically", "autostart", "on login",
+                                "with windows"),
       confirm=lambda a: f"{'Enable' if a.get('enabled') else 'Disable'} {a.get('name')} at startup?")
 def set_startup_app(name: str, enabled: bool):
     import difflib
@@ -461,7 +463,7 @@ def _radios(kind: str | None, state: str | None):
 @tool("Turn Bluetooth or Wi-Fi on/off, airplane mode (all radios off/on), or say their current state.",
       {"radio": {"type": "string", "enum": ["bluetooth", "wifi", "airplane"]},
        "action": {"type": "string", "enum": ["on", "off", "status"]}},
-      triggers=("bluetooth", "wifi", "wi-fi", "airplane", "flight mode", "radio", "wireless"))
+      triggers=("bluetooth", "blue tooth", "wifi", "wi-fi", "wi fi", "airplane", "flight mode", "radio", "wireless"))
 def radio(radio: str, action: str):
     kind = {"bluetooth": "bluetooth", "wifi": "wi_fi", "airplane": None}[radio]
     if radio == "airplane" and action != "status":
@@ -489,7 +491,8 @@ def radio(radio: str, action: str):
 @tool("Set or check screen brightness (laptop screens and external monitors that support DDC/CI).",
       {"action": {"type": "string", "enum": ["set", "up", "down", "get"]},
        "percent": {"type": "integer", "description": "0-100 for set; step for up/down (default 15)"}},
-      required=["action"], triggers=("brightness", "brighter", "dimmer", "dim", "bright", "screen", "monitor"))
+      required=["action"], triggers=("brightness", "brighter", "dimmer", "dim", "bright", "darker", "screen",
+                                     "monitor"))
 def brightness(action: str, percent: int | None = None):
     levels = []
     try:   # external monitors over DDC/CI

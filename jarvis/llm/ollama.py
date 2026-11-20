@@ -77,9 +77,10 @@ class OllamaProvider(LLMProvider):
             "options": {"temperature": self.temperature, "num_ctx": self.num_ctx},
         }
         if on_text is None:
-            msg = self._post(body, stream=False).json()["message"]
+            reply = self._post(body, stream=False).json()
+            msg = reply["message"]
         else:  # stream tokens so the voice can start on the first sentence
-            content, tool_calls = [], []
+            content, tool_calls, reply = [], [], {}
             with self._post(body, stream=True) as r:
                 for line in r.iter_lines():
                     if not line:
@@ -91,12 +92,14 @@ class OllamaProvider(LLMProvider):
                         on_text(m["content"])
                     tool_calls += m.get("tool_calls") or []
                     if chunk.get("done"):
+                        reply = chunk
                         break
             msg = {"role": "assistant", "content": "".join(content)}
             if tool_calls:
                 msg["tool_calls"] = tool_calls
         msg.pop("thinking", None)
         self.messages.append(msg)
+        self.warn_if_full(reply.get("prompt_eval_count"))
 
         calls = []
         for i, tc in enumerate(msg.get("tool_calls") or []):

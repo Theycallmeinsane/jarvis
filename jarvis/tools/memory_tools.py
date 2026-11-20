@@ -11,10 +11,12 @@ def _mem(ctx):
     return mem
 
 
-@tool("Remember a fact about the user for future conversations (preferences, names, plans). "
-      "Use when the user says 'remember ...' or shares something clearly worth keeping.",
-      {"fact": {"type": "string", "description": "Short fact about the user, e.g. 'favourite colour is blue'"}},
-      enabled=lambda cfg: (cfg.get("memory") or {}).get("enabled", True))
+# Only on an explicit ask: small models used to "remember" things nobody said (once, the example that used to
+# sit in this description), and every remembered fact is repeated in every later conversation.
+@tool("Remember something about the user for future conversations, only when they ask you to remember it.",
+      {"fact": {"type": "string", "description": "What to remember, in the user's own words"}},
+      enabled=lambda cfg: (cfg.get("memory") or {}).get("enabled", True),
+      triggers=("remember", "don't forget", "do not forget", "keep in mind"))
 def remember(fact: str, ctx=None):
     return _mem(ctx).remember(fact)
 
