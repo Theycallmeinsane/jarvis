@@ -106,6 +106,11 @@ media:
   vlc_path: null              # found automatically; set if VLC is somewhere unusual
   default_app: spotify        # "play some music" with nothing open starts this; null = don't
 
+spotify:                      # full Spotify control (see "Spotify" in the README); play/pause/next work without it
+  enabled: auto               # auto = on once SPOTIFY_CLIENT_ID is in .env; false = never offer the Spotify tools
+  token_file: data/spotify_token.json   # your sign-in (git-ignored); delete it to sign out
+  default_device: null        # where to play when nothing is active, e.g. "Living Room" (null = this PC)
+
 ducking:                      # turn whatever is playing down while Jarvis listens and talks
   enabled: true
   level: 0.3                  # 30% of the app's own volume; restored afterwards (1.0 = don't duck)

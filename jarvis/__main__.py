@@ -1,4 +1,4 @@
-"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login] [--chrome-setup]"""
+"""python -m jarvis [--tray] [--text] [--llm claude] [--voice friday] [--list-devices] [--check] [--setup] [--google-setup] [--google-login] [--chrome-setup] [--spotify-login]"""
 from __future__ import annotations
 
 import argparse
@@ -28,6 +28,7 @@ def main(argv=None):
                     help="guided Google Calendar + Gmail setup (opens each Google Cloud page in turn)")
     ap.add_argument("--chrome-setup", action="store_true", help="link Chrome so Jarvis can control tabs, pages and Claude")
     ap.add_argument("--google-login", action="store_true", help="connect Google Calendar + Gmail (opens browser)")
+    ap.add_argument("--spotify-login", action="store_true", help="connect Spotify (opens browser; needs SPOTIFY_CLIENT_ID)")
     ap.add_argument("--debug", action="store_true")
     args = ap.parse_args(argv)
 
@@ -72,6 +73,16 @@ def main(argv=None):
         from .tools.google_tools import login
 
         print(login(cfg))
+        return
+    if args.spotify_login:
+        from .spotify import SpotifyError, login as spotify_login
+
+        try:
+            print("Opening Spotify in your browser... approve Jarvis there (waiting up to 3 minutes).")
+            print(spotify_login(cfg))
+        except SpotifyError as e:
+            print(e)
+            sys.exit(1)
         return
     if args.performance:
         from .config import save_local

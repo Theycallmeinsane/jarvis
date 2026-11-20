@@ -40,7 +40,7 @@ SPEAKS_RESULT = {
     "media_control", "play_song", "volume", "app_volume", "open_app", "open_website", "web_search", "set_timer", "cancel_timer",
     "lock_computer", "take_screenshot", "take_note", "copy_to_clipboard", "type_text", "window_action",
     "close_window", "desktop_action", "press_keys", "open_settings", "open_folder", "theme", "switch_voice",
-    "close_app", "power", "open_path",
+    "close_app", "power", "open_path", "spotify_play", "spotify_control", "spotify_playlist", "spotify_delete_playlist",
 }
 
 

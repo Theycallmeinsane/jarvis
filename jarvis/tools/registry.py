@@ -68,7 +68,7 @@ class ToolBox:
 
     def __init__(self, cfg, context: dict[str, Any] | None = None):
         from . import (builtin, chrome, files_ext, github_tools, google_tools, memory_tools,  # noqa: F401  built-ins
-                       rgb_tools, system_ext, vlc_tools, windows)
+                       rgb_tools, spotify_tools, system_ext, vlc_tools, windows)
 
         self.cfg = cfg
         self.context = context or {}

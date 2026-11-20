@@ -272,9 +272,17 @@ def _endpoint_volume():
 @tool("Play a specific song (or 'song by artist') on Spotify. For just play/pause/next use media_control.",
       {"song": {"type": "string", "description": "e.g. 'Glimpse of Us by Joji'"}},
       triggers=("play", "put on", "listen", "song", "music", "spotify", "track", "hear"))
-def play_song(song: str):
-    from .. import media
+def play_song(song: str, ctx=None):
+    from .. import media, spotify
 
+    cfg = ctx.cfg if ctx else None
+    if spotify.enabled(cfg) and spotify.client(cfg).connected():   # Web API: finds and starts the exact song
+        try:
+            return Spoken(spotify.client(cfg).play(song, "track"))
+        except (spotify.NotConnected, spotify.PremiumRequired, spotify.NoDevice) as e:
+            log.info("play_song: Spotify API unavailable (%s), using the app", e)
+        except spotify.SpotifyError as e:
+            raise ToolFailed(str(e)) from e
     ok, message = media.play_song(song)
     if not ok:
         raise ToolFailed(message)
